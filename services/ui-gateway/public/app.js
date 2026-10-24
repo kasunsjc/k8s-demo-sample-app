@@ -181,13 +181,16 @@ function explorerRequest() {
 $('#ex-copy-curl').addEventListener('click', async () => {
   const { method, url, body } = explorerRequest();
   const absoluteUrl = new URL(url, window.location.origin).href;
+  const command = window.kubeplayBuildCurlCommand(method, absoluteUrl, body);
   try {
-    await navigator.clipboard.writeText(window.kubeplayBuildCurlCommand(method, absoluteUrl, body));
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(command);
     $('#ex-meta').className = 'meta small';
     $('#ex-meta').textContent = 'cURL command copied to clipboard.';
   } catch {
-    $('#ex-meta').className = 'meta small bad';
-    $('#ex-meta').textContent = 'Could not copy cURL command. Check clipboard permissions.';
+    $('#ex-meta').className = 'meta small';
+    $('#ex-meta').textContent = 'Clipboard unavailable; select and copy the cURL command below.';
+    $('#ex-out').textContent = command;
   }
 });
 

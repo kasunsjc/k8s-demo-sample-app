@@ -5,7 +5,7 @@ function shellQuote(value) {
 }
 
 function buildCurlCommand(method, url, body) {
-  const parts = ['curl', '--request', shellQuote(method), shellQuote(url)];
+  const parts = ['curl', '--globoff', '--request', shellQuote(method), shellQuote(url)];
   if (body !== undefined) {
     parts.push('--header', shellQuote('Content-Type: application/json'), '--data-raw', shellQuote(body));
   }
