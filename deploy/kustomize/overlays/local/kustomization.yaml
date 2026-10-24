@@ -7,16 +7,16 @@ resources:
 images:
   - name: kubeplay/inspector-api
     newName: kasunsjc/kubeplay-inspector-api
-    newTag: 0.1.0
+    newTag: 0.1.1
   - name: kubeplay/notes-api
     newName: kasunsjc/kubeplay-notes-api
-    newTag: 0.1.0
+    newTag: 0.1.1
   - name: kubeplay/worker
     newName: kasunsjc/kubeplay-worker
-    newTag: 0.1.0
+    newTag: 0.1.1
   - name: kubeplay/ui-gateway
     newName: kasunsjc/kubeplay-ui-gateway
-    newTag: 0.1.0
+    newTag: 0.1.1
 patches:
   - target:
       kind: Service

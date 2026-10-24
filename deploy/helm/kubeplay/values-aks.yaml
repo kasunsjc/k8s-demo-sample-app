@@ -2,7 +2,7 @@
 #   -f deploy/helm/kubeplay/values-aks.yaml --set global.imageRegistry=<acr>.azurecr.io
 global:
   imageRegistry: ACR_NAME.azurecr.io
-  imageTag: "0.1.0"
+  imageTag: "0.1.1"
 ui:
   title: KubePlay on AKS
 redis:

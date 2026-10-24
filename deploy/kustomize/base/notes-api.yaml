@@ -48,7 +48,7 @@ spec:
               drop: ["ALL"]
       containers:
         - name: notes-api
-          image: kubeplay/notes-api:0.1.0
+          image: kubeplay/notes-api:0.1.1
           ports:
             - name: http
               containerPort: 8000

@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: worker
-          image: kubeplay/worker:0.1.0
+          image: kubeplay/worker:0.1.1
           args: ["consume"]
           env:
             - name: REDIS_HOST
@@ -94,7 +94,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: report
-              image: kubeplay/worker:0.1.0
+              image: kubeplay/worker:0.1.1
               args: ["report"]
               env:
                 - name: REDIS_HOST

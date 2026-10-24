@@ -33,7 +33,7 @@ Open the UI (Compose: <http://localhost:3000>, kind: <http://localhost:8088>):
 | Header | Platform badge (Docker Compose / Kubernetes + namespace), health chips for gateway, inspector, notes, Redis, and the gateway pod |
 | Pod fleet | One tile per inspector-api pod: version/colour, node, pod IP, namespace, service account, limits, uptime and share of traffic |
 | Chaos & load | Readiness/liveness failures, crash, CPU and memory stress, slow and error responses |
-| Request explorer | httpbin-style requests to any inspector endpoint with status, latency and content type |
+| Request explorer | httpbin-style requests to any inspector endpoint with status, latency, content type and a copyable cURL command |
 | Service health | Upstream readiness and latency from `GET /api/gateway/status`, mapped to K8s concepts |
 | Notes / Jobs | Redis-backed notes (shows which pod wrote them) and worker job results |
 | Activity log | Every action with status, latency and the pod that handled it |
@@ -92,7 +92,7 @@ Runs 3 inspector-api replicas (host ports 8080–8082), notes-api on 8000, Redis
 
 ```sh
 make kind-up            # 3-node cluster + metrics-server
-make deploy-kustomize   # pulls kasunsjc/kubeplay-*:0.1.0 from Docker Hub
+make deploy-kustomize   # pulls kasunsjc/kubeplay-*:0.1.1 from Docker Hub
 open http://localhost:8088
 make kind-destroy       # delete the cluster and local kubeplay images
 ```
@@ -115,7 +115,7 @@ kubectl get ingress kubeplay -n kubeplay   # open the ADDRESS
 
 ```sh
 docker login
-make dockerhub-push DOCKERHUB_USER=<user>                                   # linux/amd64, tags 0.1.0 + latest
+make dockerhub-push DOCKERHUB_USER=<user>                                   # linux/amd64, tags 0.1.1 + latest
 make dockerhub-push DOCKERHUB_USER=<user> PLATFORMS=linux/amd64,linux/arm64 # multi-arch
 ```
 

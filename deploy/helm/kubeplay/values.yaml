@@ -1,7 +1,7 @@
 global:
   # e.g. myacr.azurecr.io — prefixed to every kubeplay image.
   imageRegistry: ""
-  imageTag: "0.1.0"
+  imageTag: "0.1.1"
   imagePullPolicy: IfNotPresent
 
 inspector:
