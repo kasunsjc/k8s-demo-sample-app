@@ -5,12 +5,12 @@ KubePlay is a small polyglot microservice system inspired by httpbin, but every 
 
 ```mermaid
 flowchart LR
-  user((Browser)) -->|NodePort / Ingress| ui[ui-gateway<br/>Node.js]
-  ui -->|/api/inspector| insp[inspector-api<br/>Go · 3+ pods · HPA]
-  ui -->|/api/notes| notes[notes-api<br/>Python FastAPI]
-  notes --> redis[(redis<br/>StatefulSet + PVC)]
-  worker[worker<br/>Deployment] --> redis
-  cron[worker-report<br/>CronJob] --> redis
+  user(("Browser")) -->|"NodePort or Ingress"| ui["ui-gateway (Node.js)"]
+  ui -->|"/api/inspector"| insp["inspector-api (Go, HPA)"]
+  ui -->|"/api/notes"| notes["notes-api (Python FastAPI)"]
+  notes --> redis[("redis StatefulSet + PVC")]
+  worker["worker Deployment"] --> redis
+  cron["worker-report CronJob"] --> redis
 ```
 
 ## Services
