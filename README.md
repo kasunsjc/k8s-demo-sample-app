@@ -92,7 +92,7 @@ Runs 3 inspector-api replicas (host ports 8080–8082), notes-api on 8000, Redis
 
 ```sh
 make kind-up            # 3-node cluster + metrics-server
-make deploy-kustomize   # pulls kasunsjc/kubeplay-*:0.1.0 from Docker Hub
+make deploy-kustomize   # pulls kasunsjc/kubeplay-*:0.1.1 from Docker Hub
 open http://localhost:8088
 make kind-destroy       # delete the cluster and local kubeplay images
 ```
@@ -115,7 +115,7 @@ kubectl get ingress kubeplay -n kubeplay   # open the ADDRESS
 
 ```sh
 docker login
-make dockerhub-push DOCKERHUB_USER=<user>                                   # linux/amd64, tags 0.1.0 + latest
+make dockerhub-push DOCKERHUB_USER=<user>                                   # linux/amd64, tags 0.1.1 + latest
 make dockerhub-push DOCKERHUB_USER=<user> PLATFORMS=linux/amd64,linux/arm64 # multi-arch
 ```
 

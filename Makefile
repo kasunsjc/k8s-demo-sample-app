@@ -2,9 +2,9 @@ CLUSTER   ?= kubeplay
 NS        ?= kubeplay
 TAG       ?= dev
 ACR       ?=
-AKS_TAG   ?= 0.1.0
+AKS_TAG   ?= 0.1.1
 DOCKERHUB_USER ?=
-DOCKERHUB_TAG  ?= 0.1.0
+DOCKERHUB_TAG  ?= 0.1.1
 # Registry images target amd64 (AKS/EKS/GKE); override with PLATFORMS=linux/amd64,linux/arm64 if needed.
 PLATFORMS      ?= linux/amd64
 BUILDER        ?= kubeplay-builder
@@ -37,7 +37,7 @@ compose-down: ## Stop docker compose and remove volumes
 	docker compose down -v
 
 # Docker Hub has no nested repos, so images are pushed as <user>/kubeplay-<svc>.
-dockerhub-push: ## Build linux/amd64 images and push to Docker Hub (DOCKERHUB_USER=<user> [DOCKERHUB_TAG=0.1.0])
+dockerhub-push: ## Build linux/amd64 images and push to Docker Hub (DOCKERHUB_USER=<user> [DOCKERHUB_TAG=0.1.1])
 	@test -n "$(DOCKERHUB_USER)" || (echo "Set DOCKERHUB_USER=<username>, e.g. make dockerhub-push DOCKERHUB_USER=jdoe" && exit 1)
 	@docker info 2>/dev/null | grep -q '^ *Username:' || echo "Note: run 'docker login' first if the push is denied."
 	@# A temporary docker-container builder handles cross-arch builds; it is removed afterwards even on failure.
