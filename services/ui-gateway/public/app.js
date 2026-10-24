@@ -170,14 +170,30 @@ document.querySelectorAll('[data-preset]').forEach((chip) => {
   });
 });
 
-$('#explorer').addEventListener('submit', async (e) => {
-  e.preventDefault();
+function explorerRequest() {
   const method = $('#ex-method').value;
   let path = $('#ex-path').value.trim() || '/';
   if (!path.startsWith('/')) path = `/${path}`;
   const raw = $('#ex-body').value.trim();
-  const body = raw && method !== 'GET' ? raw : undefined;
-  const url = `/api/inspector${path}`;
+  return { method, url: `/api/inspector${path}`, body: raw && method !== 'GET' ? raw : undefined };
+}
+
+$('#ex-copy-curl').addEventListener('click', async () => {
+  const { method, url, body } = explorerRequest();
+  const absoluteUrl = new URL(url, window.location.origin).href;
+  try {
+    await navigator.clipboard.writeText(window.kubeplayBuildCurlCommand(method, absoluteUrl, body));
+    $('#ex-meta').className = 'meta small';
+    $('#ex-meta').textContent = 'cURL command copied to clipboard.';
+  } catch {
+    $('#ex-meta').className = 'meta small bad';
+    $('#ex-meta').textContent = 'Could not copy cURL command. Check clipboard permissions.';
+  }
+});
+
+$('#explorer').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { method, url, body } = explorerRequest();
   try {
     const { status, data, headers, ms } = await api(method, url, body);
     const type = headers.get('content-type') || '–';
