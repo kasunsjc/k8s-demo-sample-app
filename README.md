@@ -121,6 +121,33 @@ make dockerhub-push DOCKERHUB_USER=<user> PLATFORMS=linux/amd64,linux/arm64 # mu
 
 Images are pushed as `<user>/kubeplay-<service>`. A temporary buildx builder is created and removed after the push (`make buildx-clean` if a push was interrupted).
 
+## CI/CD
+
+[.github/workflows/dockerhub.yml](.github/workflows/dockerhub.yml) runs after a merged `release/x.y.z` or `hotfix/x.y.z` PR to `main`, or manually from `main` via *Run workflow* with a version input:
+
+1. Runs all unit tests (Go, pytest, node).
+2. Builds each service for `linux/amd64` + `linux/arm64` and pushes `<user>/kubeplay-<service>` with SemVer tags (`x.y.z`, `x.y`, `x`), `latest`, and `sha-<commit>`.
+3. Creates a GitHub Release and `v<x.y.z>` tag after all images publish successfully.
+
+Repository settings required (*Settings → Secrets and variables → Actions*):
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `DOCKERHUB_USERNAME` | Secret | Docker Hub username (e.g. `kasunsjc`) |
+| `DOCKERHUB_TOKEN` | Secret | Docker Hub access token (Read & Write) |
+
+The workflow uses the built-in `GITHUB_TOKEN` to create releases. For manual runs, select the `main` branch and enter a version such as `1.2.3`.
+
+## Branching (Git Flow)
+
+| Branch | From | Merges into |
+| --- | --- | --- |
+| `feature/*`, `bugfix/*` | `develop` | `develop` |
+| `release/x.y.z` | `develop` | `main` and `develop` |
+| `hotfix/x.y.z` | `main` | `main` and `develop` |
+
+`main` only receives release and hotfix merges. A merged `release/x.y.z` or `hotfix/x.y.z` PR publishes versioned images and creates the matching `v<x.y.z>` GitHub Release. Commits use Conventional Commits (`feat:`, `fix:`, `docs:` …). Details: [.github/skills/git-flow/SKILL.md](.github/skills/git-flow/SKILL.md).
+
 ## Architectures (Apple Silicon)
 
 | Target | Images | Arch |
@@ -156,7 +183,7 @@ make lint     # helm lint + kustomize render
 
 Python tests need `pip install -r requirements-dev.txt` in each Python service.
 
-Copilot customizations live in `.github/`: project instructions, per-language `instructions/`, and skills (`add-k8s-concept`, `deploy-kubeplay`, `run-demo`, `readme-check`).
+Copilot customizations live in `.github/`: project instructions, per-language `instructions/`, and skills (`add-k8s-concept`, `deploy-kubeplay`, `run-demo`, `readme-check`, `git-flow`).
 
 ## Troubleshooting
 
@@ -176,7 +203,7 @@ deploy/helm/kubeplay Helm chart (values-local.yaml, values-aks.yaml)
 deploy/kind/         kind cluster config
 deploy/compose/      files mounted by docker-compose
 demos/               demo scenarios and extra manifests
-.github/             Copilot instructions and skills
+.github/             Copilot instructions, skills and the Docker Hub workflow
 ```
 
 > Secrets in this repo are demo values only.

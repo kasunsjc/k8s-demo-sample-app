@@ -20,6 +20,9 @@ Any change to a container's env, ports, probes, resources or security context mu
 ## Keep the README current
 Before finishing any task that adds, removes or renames a Make target, endpoint, service, dashboard panel, port, compose/deploy setting or skill, run the `readme-check` skill and update `README.md` in the same change. A task is not done while the README describes something that no longer exists.
 
+## Branching (Git Flow)
+All changes follow Git Flow — use the `git-flow` skill. Never commit directly to `main` or `develop`: work on `feature/*` or `bugfix/*` from `develop`, `release/x.y.z` from `develop`, and `hotfix/x.y.z` from `main`. Pushes to `main` publish images to Docker Hub via `.github/workflows/dockerhub.yml`, so only release/hotfix merges land there. Use Conventional Commit messages.
+
 ## Build and test
 ```sh
 make test     # go test, pytest, node --test
