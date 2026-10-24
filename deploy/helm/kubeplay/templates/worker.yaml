@@ -1,0 +1,92 @@
+{{- if .Values.worker.enabled }}
+{{- $v := .Values.worker }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "worker") | nindent 4 }}
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  template:
+    metadata:
+      labels:
+        {{- include "kubeplay.labels" (dict "root" . "name" "worker") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 70
+      securityContext:
+        {{- include "kubeplay.podSecurityContext" 10001 | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "kubeplay.image" (dict "root" . "image" $v.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args: ["consume"]
+          env:
+            {{- include "kubeplay.redisEnv" . | nindent 12 }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          livenessProbe:
+            exec:
+              command: ["python", "healthcheck.py"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            {{- include "kubeplay.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 10Mi
+{{- if $v.cronjob.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: worker-report
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "worker-report") | nindent 4 }}
+spec:
+  schedule: {{ $v.cronjob.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 900
+      template:
+        metadata:
+          labels:
+            {{- include "kubeplay.labels" (dict "root" . "name" "worker-report") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            {{- include "kubeplay.podSecurityContext" 10001 | nindent 12 }}
+          containers:
+            - name: report
+              image: {{ include "kubeplay.image" (dict "root" . "image" $v.image) }}
+              imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+              args: ["report"]
+              env:
+                {{- include "kubeplay.redisEnv" . | nindent 16 }}
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+              resources:
+                {{- toYaml $v.resources | nindent 16 }}
+              securityContext:
+                {{- include "kubeplay.containerSecurityContext" . | nindent 16 }}
+{{- end }}
+{{- end }}

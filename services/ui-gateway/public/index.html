@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KubePlay</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <h1 id="title">KubePlay</h1>
+    <div class="gateway" id="gateway">gateway: loading…</div>
+  </header>
+
+  <main>
+    <section class="card wide">
+      <div class="card-head">
+        <h2>Pod fleet <small>inspector-api — live load balancing</small></h2>
+        <div class="controls">
+          <label><input type="checkbox" id="polling" checked> poll</label>
+          <span id="stats" class="muted"></span>
+          <button id="reset-fleet" class="ghost">reset</button>
+        </div>
+      </div>
+      <div id="pods" class="pods"></div>
+      <p class="muted">Each tile is a pod answering <code>/whoami</code> through the Service. Change <code>APP_COLOR</code>/<code>APP_VERSION</code> to watch a rolling update.</p>
+    </section>
+
+    <section class="card">
+      <h2>Chaos &amp; load</h2>
+      <p class="muted">Requests hit <em>one</em> pod chosen by the Service.</p>
+      <div class="buttons">
+        <button data-method="POST" data-url="/api/inspector/chaos/ready?state=false">Make a pod unready</button>
+        <button data-method="POST" data-url="/api/inspector/chaos/live?state=false" class="warn">Fail liveness</button>
+        <button data-method="POST" data-url="/api/inspector/chaos/crash" class="danger">Crash a pod</button>
+        <button data-method="POST" data-url="/api/inspector/stress/cpu?seconds=60">CPU stress 60s</button>
+        <button data-method="POST" data-url="/api/inspector/stress/memory?mb=200" class="warn">Allocate 200 MiB</button>
+        <button data-method="DELETE" data-url="/api/inspector/stress/memory">Release memory</button>
+        <button data-method="GET" data-url="/api/inspector/delay/3">Slow request (3s)</button>
+        <button data-method="GET" data-url="/api/inspector/status/503">Return 503</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Inspect</h2>
+      <div class="buttons">
+        <button data-inspect="/api/inspector/config">ConfigMap</button>
+        <button data-inspect="/api/inspector/secret">Secret</button>
+        <button data-inspect="/api/inspector/env">Env</button>
+        <button data-inspect="/api/inspector/headers">Headers</button>
+        <button data-inspect="/api/notes/">notes-api</button>
+        <button data-inspect="/api/notes/readyz">notes readiness</button>
+      </div>
+      <pre id="inspect" class="output">Pick something to inspect.</pre>
+    </section>
+
+    <section class="card">
+      <h2>Notes <small>notes-api → Redis StatefulSet</small></h2>
+      <form id="note-form">
+        <input id="note-title" placeholder="Title" maxlength="200" required>
+        <input id="note-body" placeholder="Body (optional)" maxlength="5000">
+        <button type="submit">Add</button>
+      </form>
+      <ul id="notes" class="list"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Jobs <small>worker Deployment + CronJob</small></h2>
+      <div class="buttons">
+        <button data-job="report">Enqueue report</button>
+        <button data-job="slow">Enqueue slow job (10s)</button>
+      </div>
+      <div class="muted" id="queue">queue: –</div>
+      <ul id="jobs" class="list"></ul>
+    </section>
+
+    <section class="card wide">
+      <h2>Activity log</h2>
+      <ul id="log" class="log"></ul>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

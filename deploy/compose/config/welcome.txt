@@ -1,0 +1,1 @@
+Hello from a bind-mounted file (in Kubernetes this comes from a ConfigMap).

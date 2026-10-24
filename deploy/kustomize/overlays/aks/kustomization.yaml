@@ -1,0 +1,34 @@
+# AKS: images from ACR, Azure Disk storage, AKS app routing ingress.
+# `make aks-deploy-kustomize ACR=<name>` replaces ACR_NAME at apply time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: kubeplay/inspector-api
+    newName: ACR_NAME.azurecr.io/kubeplay/inspector-api
+    newTag: 0.1.0
+  - name: kubeplay/notes-api
+    newName: ACR_NAME.azurecr.io/kubeplay/notes-api
+    newTag: 0.1.0
+  - name: kubeplay/worker
+    newName: ACR_NAME.azurecr.io/kubeplay/worker
+    newTag: 0.1.0
+  - name: kubeplay/ui-gateway
+    newName: ACR_NAME.azurecr.io/kubeplay/ui-gateway
+    newTag: 0.1.0
+patches:
+  - target:
+      kind: Ingress
+      name: kubeplay
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: webapprouting.kubernetes.azure.com
+  - target:
+      kind: StatefulSet
+      name: redis
+    patch: |-
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: managed-csi

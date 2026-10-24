@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: inspector-api
+automountServiceAccountToken: false
+---
+# Mounted as files (hot-reloaded) and also used as an env var (only updated on restart).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inspector-config
+data:
+  app-message: "Hello from KubePlay!"
+  feature-flags.json: |
+    {"newDashboard": false, "maxItems": 10}
+  welcome.txt: |
+    Edit me with `kubectl edit cm inspector-config -n kubeplay` and call /config again.
+---
+# Demo values only.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: inspector-secret
+type: Opaque
+stringData:
+  api-key: demo-api-key-1234567890
+  db-password: not-a-real-password
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inspector-api
+  labels:
+    app.kubernetes.io/name: inspector-api
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inspector-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inspector-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      serviceAccountName: inspector-api
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: inspector-api
+      containers:
+        - name: inspector-api
+          image: kubeplay/inspector-api:0.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: APP_VERSION
+              value: v1
+            - name: APP_COLOR
+              value: "#3b82f6"
+            - name: APP_MESSAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: inspector-config
+                  key: app-message
+            - name: STARTUP_DELAY_SECONDS
+              value: "3"
+            - name: SHUTDOWN_DELAY_SECONDS
+              value: "5"
+            # Downward API
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+            - name: CPU_LIMIT_MILLICORES
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.cpu
+                  divisor: 1m
+            - name: MEMORY_LIMIT_MIB
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: 1Mi
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /startupz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 3
+            failureThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/kubeplay/config
+              readOnly: true
+            - name: secrets
+              mountPath: /etc/kubeplay/secrets
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: inspector-config
+        - name: secrets
+          secret:
+            secretName: inspector-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inspector-api
+  labels:
+    app.kubernetes.io/name: inspector-api
+spec:
+  selector:
+    app.kubernetes.io/name: inspector-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inspector-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: inspector-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inspector-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inspector-api

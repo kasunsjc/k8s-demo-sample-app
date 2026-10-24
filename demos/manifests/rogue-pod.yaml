@@ -1,0 +1,23 @@
+# A pod that is NOT allowed to reach Redis by the NetworkPolicy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rogue
+  namespace: kubeplay
+  labels:
+    app.kubernetes.io/name: rogue
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+    - name: rogue
+      image: redis:7.4-alpine
+      command: ["sleep", "3600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 999
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault

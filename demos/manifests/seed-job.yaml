@@ -1,0 +1,43 @@
+# One-off Job: kubectl apply -f demos/manifests/seed-job.yaml (delete it before re-running).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-notes
+  namespace: kubeplay
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seed-notes
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          image: kubeplay/worker:dev
+          args: ["seed"]
+          env:
+            - name: SEED_COUNT
+              value: "5"
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

@@ -1,0 +1,14 @@
+{
+  "name": "kubeplay-ui-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KubePlay dashboard and API gateway (zero dependencies)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}

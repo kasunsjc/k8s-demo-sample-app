@@ -1,0 +1,39 @@
+{{- if and .Values.worker.enabled .Values.worker.seedJob.enabled }}
+# Runs once after install to pre-populate notes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-notes
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "seed-notes") | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "kubeplay.labels" (dict "root" . "name" "seed-notes") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "kubeplay.podSecurityContext" 10001 | nindent 8 }}
+      containers:
+        - name: seed
+          image: {{ include "kubeplay.image" (dict "root" . "image" .Values.worker.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args: ["seed"]
+          env:
+            - name: SEED_COUNT
+              value: {{ .Values.worker.seedJob.count | quote }}
+            {{- include "kubeplay.redisEnv" . | nindent 12 }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          securityContext:
+            {{- include "kubeplay.containerSecurityContext" . | nindent 12 }}
+{{- end }}

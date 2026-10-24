@@ -1,0 +1,8 @@
+# helm upgrade --install kubeplay deploy/helm/kubeplay -n kubeplay --create-namespace -f deploy/helm/kubeplay/values-local.yaml
+global:
+  imageTag: dev
+ui:
+  title: KubePlay (local)
+  service:
+    type: NodePort
+    nodePort: 30080

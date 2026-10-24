@@ -1,0 +1,37 @@
+# Only notes-api, worker and its CronJob may talk to Redis.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-allow-clients
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["notes-api", "worker", "worker-report", "seed-notes"]
+      ports:
+        - port: 6379
+---
+# notes-api is internal: reachable only via the gateway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notes-api-allow-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: notes-api
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ui-gateway
+      ports:
+        - port: 8000

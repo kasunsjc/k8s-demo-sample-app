@@ -1,0 +1,71 @@
+{{- if .Values.ui.enabled }}
+{{- $v := .Values.ui }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui-gateway
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "ui-gateway") | nindent 4 }}
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ui-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "kubeplay.labels" (dict "root" . "name" "ui-gateway") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "kubeplay.podSecurityContext" 1000 | nindent 8 }}
+      containers:
+        - name: ui-gateway
+          image: {{ include "kubeplay.image" (dict "root" . "image" $v.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: APP_VERSION
+              value: {{ $v.version | quote }}
+            - name: UI_TITLE
+              value: {{ $v.title | quote }}
+            - name: INSPECTOR_URL
+              value: http://inspector-api
+            - name: NOTES_URL
+              value: http://notes-api
+            {{- include "kubeplay.downwardEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          securityContext:
+            {{- include "kubeplay.containerSecurityContext" . | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-gateway
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "ui-gateway") | nindent 4 }}
+spec:
+  type: {{ $v.service.type }}
+  selector:
+    app.kubernetes.io/name: ui-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      {{- if and (eq $v.service.type "NodePort") $v.service.nodePort }}
+      nodePort: {{ $v.service.nodePort }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,12 @@
+KubePlay is deployed to namespace {{ .Release.Namespace }}.
+
+{{- if eq .Values.ui.service.type "NodePort" }}
+UI: http://localhost:8088 (kind port mapping) or http://<node-ip>:{{ .Values.ui.service.nodePort }}
+{{- else if .Values.ingress.enabled }}
+UI: kubectl get ingress kubeplay -n {{ .Release.Namespace }}   # use the ADDRESS column
+{{- else }}
+UI: kubectl port-forward svc/ui-gateway 8088:80 -n {{ .Release.Namespace }}  then open http://localhost:8088
+{{- end }}
+
+Watch the demo:
+  kubectl get pods,svc,hpa,pvc -n {{ .Release.Namespace }} -w

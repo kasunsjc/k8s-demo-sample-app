@@ -1,0 +1,14 @@
+# kind create cluster --config deploy/kind/kind-config.yaml
+# Two workers so scheduling, topology spread and node info are visible in the demo.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kubeplay
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # ui-gateway NodePort -> http://localhost:8088
+      - containerPort: 30080
+        hostPort: 8088
+        protocol: TCP
+  - role: worker
+  - role: worker

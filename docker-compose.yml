@@ -1,0 +1,50 @@
+# Local development without Kubernetes. UI: http://localhost:3000
+x-redis-env: &redis-env
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: kubeplay-demo-password
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "kubeplay-demo-password"]
+    volumes:
+      - redis-data:/data
+
+  inspector-api:
+    build: services/inspector-api
+    environment:
+      APP_VERSION: v1-compose
+      APP_COLOR: "#22c55e"
+      CONFIG_DIR: /etc/kubeplay/config
+    volumes:
+      - ./deploy/compose/config:/etc/kubeplay/config:ro
+    ports:
+      - "8080:8080"
+
+  notes-api:
+    build: services/notes-api
+    environment:
+      <<: *redis-env
+      ROOT_PATH: /api/notes
+    depends_on: [redis]
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: services/worker
+    environment: *redis-env
+    depends_on: [redis]
+
+  ui-gateway:
+    build: services/ui-gateway
+    environment:
+      INSPECTOR_URL: http://inspector-api:8080
+      NOTES_URL: http://notes-api:8000
+      UI_TITLE: KubePlay (compose)
+    depends_on: [inspector-api, notes-api]
+    ports:
+      - "3000:3000"
+
+volumes:
+  redis-data:
