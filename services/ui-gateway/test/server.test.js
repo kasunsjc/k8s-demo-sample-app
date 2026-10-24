@@ -40,4 +40,10 @@ test('gateway proxies, serves UI and blocks traversal', async (t) => {
 
   const info = await (await fetch(`${base}/api/gateway/info`)).json();
   assert.strictEqual(info.service, 'ui-gateway');
+  assert.strictEqual(info.platform, 'docker');
+
+  const status = await (await fetch(`${base}/api/gateway/status`)).json();
+  assert.strictEqual(status.inspector.ok, true);
+  assert.strictEqual(status.notes.ok, false);
+  assert.strictEqual(status.redis.ok, false);
 });

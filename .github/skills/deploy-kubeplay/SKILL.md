@@ -34,6 +34,7 @@ kubectl get ingress kubeplay -n kubeplay
 ## Troubleshooting
 | Symptom | Likely cause / fix |
 |---|---|
+| `failed to lock config file: ~/.kube/config.lock: file exists` | Stale lock from a crashed tool: `rm ~/.kube/config.lock && kind export kubeconfig --name kubeplay && make metrics-server` |
 | `CreateContainerConfigError: image has non-numeric user` | Dockerfile `USER` must be numeric (distroless `65532`) |
 | `ErrImageNeverPull` / `ImagePullBackOff` on kind | Images not loaded: `make kind-load`; tag must match overlay (`dev`) |
 | notes-api stuck `Init:0/1` | Redis not ready or `redis-auth` secret mismatch: `kubectl logs <pod> -c wait-for-redis` |

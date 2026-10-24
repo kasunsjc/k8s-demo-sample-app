@@ -13,6 +13,9 @@ services:
 
   inspector-api:
     build: services/inspector-api
+    # Several replicas so the dashboard shows load balancing (Docker DNS round-robin).
+    deploy:
+      replicas: 3
     environment:
       APP_VERSION: v1-compose
       APP_COLOR: "#22c55e"
@@ -20,7 +23,7 @@ services:
     volumes:
       - ./deploy/compose/config:/etc/kubeplay/config:ro
     ports:
-      - "8080:8080"
+      - "8080-8082:8080"
 
   notes-api:
     build: services/notes-api

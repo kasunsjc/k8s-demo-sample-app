@@ -1,17 +1,22 @@
-# Local clusters (kind / minikube / Docker Desktop): locally built :dev images, UI on NodePort 30080.
+# Local clusters (kind / minikube / Docker Desktop): images from Docker Hub (make dockerhub-push), UI on NodePort 30080.
+# On Apple Silicon kind the images must include linux/arm64 (push with PLATFORMS=linux/amd64,linux/arm64).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
 images:
   - name: kubeplay/inspector-api
-    newTag: dev
+    newName: kasunsjc/kubeplay-inspector-api
+    newTag: 0.1.0
   - name: kubeplay/notes-api
-    newTag: dev
+    newName: kasunsjc/kubeplay-notes-api
+    newTag: 0.1.0
   - name: kubeplay/worker
-    newTag: dev
+    newName: kasunsjc/kubeplay-worker
+    newTag: 0.1.0
   - name: kubeplay/ui-gateway
-    newTag: dev
+    newName: kasunsjc/kubeplay-ui-gateway
+    newTag: 0.1.0
 patches:
   - target:
       kind: Service

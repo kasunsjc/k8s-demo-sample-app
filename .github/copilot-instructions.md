@@ -17,6 +17,9 @@ Any change to a container's env, ports, probes, resources or security context mu
 3. `docker-compose.yml` (when relevant locally)
 4. `README.md` concept map and `demos/README.md` when behaviour changes
 
+## Keep the README current
+Before finishing any task that adds, removes or renames a Make target, endpoint, service, dashboard panel, port, compose/deploy setting or skill, run the `readme-check` skill and update `README.md` in the same change. A task is not done while the README describes something that no longer exists.
+
 ## Build and test
 ```sh
 make test     # go test, pytest, node --test

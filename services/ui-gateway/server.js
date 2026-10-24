@@ -40,6 +40,16 @@ function sendJSON(res, status, body) {
   res.end(data);
 }
 
+async function probe(base, path) {
+  const start = Date.now();
+  try {
+    const r = await fetch(new URL(path, base), { signal: AbortSignal.timeout(2000) });
+    return { ok: r.ok, status: r.status, latencyMs: Date.now() - start };
+  } catch (err) {
+    return { ok: false, status: 0, latencyMs: Date.now() - start, error: err.name === 'TimeoutError' ? 'timeout' : 'unreachable' };
+  }
+}
+
 function proxy(req, res, base, upstreamPath, search) {
   // Only the path/query come from the client, so the upstream host can't be overridden (no SSRF).
   const target = new URL(base);
@@ -52,7 +62,8 @@ function proxy(req, res, base, upstreamPath, search) {
   headers['x-forwarded-host'] = req.headers.host || '';
   headers['x-kubeplay-gateway'] = podName();
 
-  const upstreamReq = http.request(target, { method: req.method, headers, timeout: 35_000 }, (upRes) => {
+  // agent:false opens a new connection per request so kube-proxy/Docker DNS spread calls across pods.
+  const upstreamReq = http.request(target, { method: req.method, headers, timeout: 35_000, agent: false }, (upRes) => {
     res.writeHead(upRes.statusCode, upRes.headers);
     upRes.pipe(res);
   });
@@ -103,7 +114,20 @@ function createApp(cfg = loadConfig()) {
         node: process.env.NODE_NAME || 'unknown',
         version: cfg.version,
         title: cfg.title,
+        runtime: process.version,
+        uptimeSeconds: Math.round(process.uptime()),
+        platform: process.env.KUBERNETES_SERVICE_HOST ? 'kubernetes' : 'docker',
       });
+    }
+    if (pathname === '/api/gateway/status') {
+      return Promise.all([probe(cfg.upstreams.inspector, '/readyz'), probe(cfg.upstreams.notes, '/readyz')])
+        .then(([inspector, notes]) => sendJSON(res, 200, {
+          gateway: { ok: true, status: 200, latencyMs: 0 },
+          inspector,
+          // notes-api readiness pings Redis, so it doubles as the Redis check.
+          notes,
+          redis: { ok: notes.ok, status: notes.status, latencyMs: notes.latencyMs },
+        }));
     }
     const match = API_ROUTE.exec(pathname);
     if (match) {
