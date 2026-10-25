@@ -123,6 +123,8 @@ Images are pushed as `<user>/kubeplay-<service>`. A temporary buildx builder is 
 
 ## CI/CD
 
+[.github/workflows/pr-validation.yml](.github/workflows/pr-validation.yml) runs the `test` and `manifest-lint` checks on pull requests targeting `develop` or `main`. To block merges when either fails, require both status checks in branch protection for those branches.
+
 [.github/workflows/dockerhub.yml](.github/workflows/dockerhub.yml) runs after a merged `release/x.y.z` or `hotfix/x.y.z` PR to `main`, or manually from `main` via *Run workflow* with a version input:
 
 1. Runs all unit tests (Go, pytest, node).

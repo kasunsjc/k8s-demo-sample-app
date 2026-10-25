@@ -29,7 +29,7 @@ Never commit directly to `main` or `develop`.
    git switch -c feature/<name> origin/develop     # hotfix: git switch -c hotfix/<x.y.z> origin/main
    ```
 3. **Commit** with Conventional Commits: `feat: …`, `fix: …`, `docs: …`, `chore: …`, `ci: …`, `refactor: …`, `test: …`. Keep commits small and focused.
-4. **Verify before pushing**: `make test && make lint`; run the `readme-check` skill if user-facing behaviour, Make targets, endpoints or ports changed.
+4. **Verify before pushing**: `make test && make lint`; run the `readme-check` skill if user-facing behaviour, Make targets, endpoints or ports changed. PRs to `develop` and `main` also run the `test` and `manifest-lint` checks from `.github/workflows/pr-validation.yml`.
 5. **Push and open a PR** to the target in the table (`feature/*`, `bugfix/*` → `develop`; `release/*`, `hotfix/*` → `main`).
 6. **Releases**
    ```sh
@@ -41,5 +41,6 @@ Never commit directly to `main` or `develop`.
 
 ## Safety
 - Ask before force-pushing, deleting remote branches, or rewriting shared history.
+- Require the `test` and `manifest-lint` status checks in branch protection for `develop` and `main`.
 - Use `--no-ff` merges for release/hotfix so the merge is visible in history.
 - Delete merged feature/bugfix branches only after the PR is merged.

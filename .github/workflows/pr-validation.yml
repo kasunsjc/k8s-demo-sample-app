@@ -1,0 +1,56 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/inspector-api/go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Python test dependencies
+        run: python -m pip install -r services/notes-api/requirements-dev.txt -r services/worker/requirements-dev.txt
+      - name: inspector-api
+        working-directory: services/inspector-api
+        run: go vet ./... && go test ./...
+      - name: notes-api
+        working-directory: services/notes-api
+        run: python -m pytest -q
+      - name: worker
+        working-directory: services/worker
+        run: python -m pytest -q
+      - name: ui-gateway
+        working-directory: services/ui-gateway
+        run: node --test
+
+  manifest-lint:
+    name: manifest-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.32.0
+      - name: Lint Helm and render Kustomize
+        run: make lint
