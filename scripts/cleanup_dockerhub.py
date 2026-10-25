@@ -15,6 +15,7 @@ REPOSITORIES = (
     "kubeplay-ui-gateway",
 )
 KEEP_RELEASES = 8
+PROTECTED_RELEASES = {"0.1.0"}
 VERSION_PATTERN = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA_PATTERN = re.compile(r"^sha-[0-9a-fA-F]{7,40}$")
 
@@ -92,7 +93,7 @@ def tags_to_delete(tags, keep_releases=KEEP_RELEASES):
         key=version_key,
         reverse=True,
     )
-    stale_versions = set(versions[keep_releases:])
+    stale_versions = set(versions[keep_releases:]) - PROTECTED_RELEASES
     stale_builds = {tag for tag in unique_tags if SHA_PATTERN.fullmatch(tag)}
     return sorted(stale_versions | stale_builds)
 

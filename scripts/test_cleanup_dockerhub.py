@@ -9,6 +9,11 @@ class TagRetentionTests(unittest.TestCase):
 
         self.assertEqual(tags_to_delete(tags), ["1.0.1", "1.0.2"])
 
+    def test_protects_the_release_tag_pinned_by_deployments(self):
+        tags = ["0.1.0"] + [f"1.0.{patch}" for patch in range(1, 11)]
+
+        self.assertEqual(tags_to_delete(tags), ["1.0.1", "1.0.2"])
+
     def test_deletes_sha_tags_but_preserves_latest_aliases_and_custom_tags(self):
         tags = [
             "latest",
