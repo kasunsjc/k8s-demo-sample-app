@@ -20,7 +20,7 @@ Compare each README section against its source of truth and update the README in
 | Docker Hub / architectures | `Makefile` vars `PLATFORMS`, `DOCKERHUB_*`, `LOCAL_PLATFORM` | Defaults and image naming (`<user>/kubeplay-<svc>`) match |
 | Troubleshooting | `.github/skills/deploy-kubeplay/SKILL.md` | Same fixes, no contradictions |
 | Development / skills list | `.github/skills/*/` | Every skill folder is named |
-| CI/CD | `.github/workflows/*.yml` | Triggers, tags, platforms and required secrets/variables match |
+| CI/CD | `.github/workflows/*.yml` | Triggers, tags, platforms, cleanup retention and required secrets/variables match |
 | Layout | top-level folders | Every top-level folder is listed |
 
 ## Steps

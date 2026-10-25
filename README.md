@@ -138,6 +138,8 @@ Repository settings required (*Settings → Secrets and variables → Actions*):
 
 The workflow uses the built-in `GITHUB_TOKEN` to create releases. For manual runs, select the `main` branch and enter a version such as `1.2.3`.
 
+[.github/workflows/dockerhub-cleanup.yml](.github/workflows/dockerhub-cleanup.yml) runs weekly on Sunday at 04:30 UTC. For each service image it keeps `latest`, moving major/minor aliases, and the eight newest full `x.y.z` release tags; it removes older full releases and generated `sha-*` tags. Custom tags are left untouched. Manual runs default to dry-run; disable `dry_run` to delete tags. The cleanup uses the same Docker Hub secrets above.
+
 ## Branching (Git Flow)
 
 | Branch | From | Merges into |
@@ -204,6 +206,7 @@ deploy/kind/         kind cluster config
 deploy/compose/      files mounted by docker-compose
 demos/               demo scenarios and extra manifests
 .github/             Copilot instructions, skills and the Docker Hub workflow
+scripts/             Docker Hub retention policy and unit tests
 ```
 
 > Secrets in this repo are demo values only.

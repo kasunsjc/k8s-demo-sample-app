@@ -1,0 +1,36 @@
+name: Docker Hub Cleanup
+
+on:
+  schedule:
+    - cron: "30 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview tags that would be deleted
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test retention policy
+        run: python -m unittest discover -s scripts -p 'test_cleanup_dockerhub.py' -v
+      - name: Clean up Docker Hub tags
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        run: python scripts/cleanup_dockerhub.py
