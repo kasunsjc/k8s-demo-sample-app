@@ -79,9 +79,12 @@ def test_job_continues_trace_from_queue(r, spans):
 def test_failed_job_is_recorded_on_span(r, spans):
     spans.clear()
     worker.handle_message(r, json.dumps({"jobId": "j3", "type": "nope"}))
-    assert json.loads(r.lindex(worker.RESULTS_KEY, 0))["status"] == "failed"
+    result = json.loads(r.lindex(worker.RESULTS_KEY, 0))
     (span,) = spans.get_finished_spans()
+    assert result["status"] == "failed"
+    assert result["traceId"] == format(span.context.trace_id, "032x")
     assert span.status.status_code.name == "ERROR"
+    assert span.events[0].name == "exception"
 
 
 def test_scheduled_report_starts_new_trace(r, spans):

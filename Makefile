@@ -120,15 +120,17 @@ aks-push: check-acr ## Build in ACR (no local Docker needed)
 appinsights-secret: ## Create/update the appinsights Secret for the OpenTelemetry Collector (APPINSIGHTS_CONNECTION_STRING=...)
 	@test -n "$$APPINSIGHTS_CONNECTION_STRING" || (echo "Set APPINSIGHTS_CONNECTION_STRING to the Application Insights connection string" && exit 1)
 	@kubectl create namespace $(NS) --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-	@kubectl create secret generic appinsights -n $(NS) --from-literal=connection-string="$$APPINSIGHTS_CONNECTION_STRING" \
+	@printf '%s' "$$APPINSIGHTS_CONNECTION_STRING" | kubectl create secret generic appinsights -n $(NS) --from-file=connection-string=/dev/stdin \
 	  --dry-run=client -o yaml | kubectl apply -f -
 
 aks-deploy-kustomize: check-acr ## Deploy AKS overlay with images from $(ACR) (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
 	$(if $(APPINSIGHTS_CONNECTION_STRING),@$(MAKE) --no-print-directory appinsights-secret)
 	kubectl kustomize deploy/kustomize/overlays/$(AKS_OVERLAY) | sed 's#ACR_NAME.azurecr.io#$(ACR).azurecr.io#g' | kubectl apply -f -
+	$(if $(APPINSIGHTS_CONNECTION_STRING),kubectl rollout restart deployment/otel-collector -n $(NS))
 
 aks-deploy-helm: check-acr ## Deploy to AKS with Helm (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
 	$(if $(APPINSIGHTS_CONNECTION_STRING),@$(MAKE) --no-print-directory appinsights-secret)
 	helm upgrade --install kubeplay $(CHART) -n $(NS) --create-namespace \
 	  -f $(CHART)/values-aks.yaml --set global.imageRegistry=$(ACR).azurecr.io --set global.imageTag=$(AKS_TAG) \
 	  $(if $(APPINSIGHTS_CONNECTION_STRING),--set tracing.enabled=true)
+	$(if $(APPINSIGHTS_CONNECTION_STRING),kubectl rollout restart deployment/otel-collector -n $(NS))

@@ -10,6 +10,8 @@ import time
 import uuid
 from datetime import datetime, timezone
 
+os.environ["OTEL_SEMCONV_STABILITY_OPT_IN"] = "http/dup,database/dup"
+
 import redis
 from opentelemetry import propagate, trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -18,7 +20,7 @@ from opentelemetry.instrumentation.utils import suppress_instrumentation
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import SpanKind
+from opentelemetry.trace import SpanKind, Status, StatusCode
 
 NOTES_KEY = "kubeplay:notes"
 QUEUE_KEY = "kubeplay:jobs"
@@ -139,8 +141,23 @@ def handle_message(r: redis.Redis, raw: str) -> None:
                 "messaging.destination.name": QUEUE_KEY,
                 "messaging.message.id": str(job.get("jobId", "unknown")),
             },
-        ):
-            result = process_job(r, job)
+        ) as span:
+            try:
+                result = process_job(r, job)
+            except ValueError as exc:
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+                result = {
+                    "jobId": job.get("jobId", "unknown"),
+                    "status": "failed",
+                    "error": str(exc),
+                    "processedBy": POD_NAME,
+                    "finishedAt": now(),
+                    "traceId": current_trace_id(),
+                }
+                store_result(r, result)
+                log.error("job failed: %s", exc)
+                return
         log.info("job %s (%s) done", result["jobId"], result["type"])
     except (ValueError, json.JSONDecodeError) as exc:
         log.error("job failed: %s", exc)

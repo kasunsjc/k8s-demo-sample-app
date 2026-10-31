@@ -27,6 +27,43 @@ test('tracer is a no-op without an OTLP endpoint', () => {
   assert.strictEqual(tracer.startSpan('x', {}), null);
 });
 
+test('exports are serialized and shutdown waits for queued batches', async () => {
+  const pending = [];
+  let calls = 0;
+  let active = 0;
+  let maxActive = 0;
+  const tracer = createTracer({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector' }, {
+    log: () => {},
+    fetchImpl: () => {
+      calls += 1;
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      return new Promise((resolve) => pending.push(() => {
+        active -= 1;
+        resolve({ ok: true });
+      }));
+    },
+  });
+  const addBatch = () => {
+    for (let i = 0; i < 256; i += 1) {
+      tracer.startSpan('test', { kind: 1 }).end();
+    }
+  };
+  addBatch();
+  addBatch();
+  assert.strictEqual(calls, 1);
+  let shutdownDone = false;
+  const shutdown = tracer.shutdown().then(() => { shutdownDone = true; });
+  pending[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(calls, 2);
+  assert.strictEqual(maxActive, 1);
+  assert.strictEqual(shutdownDone, false);
+  pending[1]();
+  await shutdown;
+  assert.strictEqual(shutdownDone, true);
+});
+
 test('gateway propagates traceparent and exports spans to the collector', async (t) => {
   const exported = [];
   const collector = http.createServer((req, res) => {
@@ -63,6 +100,8 @@ test('gateway propagates traceparent and exports spans to the collector', async 
 
   const down = await fetch(`${base}/api/notes/notes`);
   assert.strictEqual(down.status, 502);
+  const failedTraceId = down.headers.get('x-trace-id');
+  assert.match(failedTraceId, /^[0-9a-f]{32}$/);
   await down.text();
 
   await new Promise((r) => setTimeout(r, 50));
@@ -82,4 +121,5 @@ test('gateway propagates traceparent and exports spans to the collector', async 
   const failed = spans.filter((s) => s.traceId !== traceId);
   assert.strictEqual(failed.length, 2);
   assert.ok(failed.every((s) => s.status.code === 2));
+  assert.ok(failed.every((s) => s.traceId === failedTraceId));
 });

@@ -228,7 +228,7 @@ document.querySelectorAll('button[data-inspect]').forEach((btn) => {
 async function loadNotes() {
   const list = $('#notes');
   try {
-    const { status, data } = await api('GET', '/api/notes/notes');
+    const { status, data } = await api('GET', '/api/notes/notes', undefined, { 'X-KubePlay-Poll': 'background' });
     list.replaceChildren();
     if (status !== 200) {
       $('#notes-meta').textContent = '';
@@ -273,7 +273,7 @@ document.querySelectorAll('button[data-job]').forEach((btn) => {
 
 async function loadJobs() {
   try {
-    const { status, data } = await api('GET', '/api/notes/jobs');
+    const { status, data } = await api('GET', '/api/notes/jobs', undefined, { 'X-KubePlay-Poll': 'background' });
     if (status !== 200) return;
     $('#queue').textContent = data.queueLength;
     $('#done').textContent = data.results.length;

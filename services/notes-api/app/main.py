@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Callable, Literal
 
+os.environ["OTEL_SEMCONV_STABILITY_OPT_IN"] = "http/dup,database/dup"
+
 import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse

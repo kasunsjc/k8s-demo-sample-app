@@ -98,6 +98,7 @@ function proxy(req, res, base, upstreamPath, search, tracer, route) {
   headers['x-forwarded-host'] = req.headers.host || '';
   headers['x-kubeplay-gateway'] = podName();
   const spans = tracer.enabled ? traceProxy(tracer, req, res, route, target, headers) : null;
+  if (spans && spans.server.ctx.sampled) res.setHeader('x-trace-id', spans.server.ctx.traceId);
 
   // agent:false opens a new connection per request so kube-proxy/Docker DNS spread calls across pods.
   const upstreamReq = http.request(target, { method: req.method, headers, timeout: 35_000, agent: false }, (upRes) => {
@@ -105,7 +106,6 @@ function proxy(req, res, base, upstreamPath, search, tracer, route) {
     if (spans) {
       spans.client.setAttribute('http.response.status_code', upRes.statusCode);
       upRes.on('end', () => spans.client.end({ error: upRes.statusCode >= 500 }));
-      if (spans.server.ctx.sampled) resHeaders['x-trace-id'] = spans.server.ctx.traceId;
     }
     res.writeHead(upRes.statusCode, resHeaders);
     upRes.pipe(res);

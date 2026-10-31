@@ -53,26 +53,37 @@ function createTracer(env = process.env, { fetchImpl = globalThis.fetch, log = c
   ];
   let queue = [];
   let failing = false;
+  let exporting = null;
 
   async function flush() {
+    if (exporting) return exporting;
     if (queue.length === 0) return;
-    const spans = queue.splice(0, queue.length);
-    const body = JSON.stringify({
-      resourceSpans: [{ resource: { attributes: resource }, scopeSpans: [{ scope: { name: 'kubeplay/ui-gateway' }, spans }] }],
-    });
-    let error = null;
+    exporting = (async () => {
+      while (queue.length > 0) {
+        const spans = queue.splice(0, MAX_BATCH_SPANS);
+        const body = JSON.stringify({
+          resourceSpans: [{ resource: { attributes: resource }, scopeSpans: [{ scope: { name: 'kubeplay/ui-gateway' }, spans }] }],
+        });
+        let error = null;
+        try {
+          const res = await fetchImpl(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(5000),
+          });
+          if (!res.ok) error = `collector returned HTTP ${res.status}`;
+        } catch (err) {
+          error = err.message;
+        }
+        // Log only on state changes so an unreachable collector doesn't flood the logs.
+        if (error && !failing) log(JSON.stringify({ msg: 'trace export failed, dropping spans', error, spans: spans.length }));
+        if (!error && failing) log(JSON.stringify({ msg: 'trace export recovered' }));
+        failing = Boolean(error);
+      }
+    })();
     try {
-      const res = await fetchImpl(url, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(5000),
-      });
-      if (!res.ok) error = `collector returned HTTP ${res.status}`;
-    } catch (err) {
-      error = err.message;
+      await exporting;
+    } finally {
+      exporting = null;
     }
-    // Log only on state changes so an unreachable collector doesn't flood the logs.
-    if (error && !failing) log(JSON.stringify({ msg: 'trace export failed, dropping spans', error, spans: spans.length }));
-    if (!error && failing) log(JSON.stringify({ msg: 'trace export recovered' }));
-    failing = Boolean(error);
   }
 
   const timer = setInterval(flush, FLUSH_MS);

@@ -30,10 +30,7 @@ spec:
             - name: SEED_COUNT
               value: {{ .Values.worker.seedJob.count | quote }}
             {{- include "kubeplay.redisEnv" . | nindent 12 }}
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+            {{- include "kubeplay.downwardEnv" . | nindent 12 }}
             {{- if .Values.tracing.enabled }}
             {{- include "kubeplay.tracingEnv" . | nindent 12 }}
             {{- end }}
