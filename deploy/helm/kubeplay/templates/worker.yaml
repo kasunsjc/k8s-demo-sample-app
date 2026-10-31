@@ -27,10 +27,10 @@ spec:
           args: ["consume"]
           env:
             {{- include "kubeplay.redisEnv" . | nindent 12 }}
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+            {{- include "kubeplay.downwardEnv" . | nindent 12 }}
+            {{- if .Values.tracing.enabled }}
+            {{- include "kubeplay.tracingEnv" . | nindent 12 }}
+            {{- end }}
           livenessProbe:
             exec:
               command: ["python", "healthcheck.py"]
@@ -80,10 +80,10 @@ spec:
               args: ["report"]
               env:
                 {{- include "kubeplay.redisEnv" . | nindent 16 }}
-                - name: POD_NAME
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.name
+                {{- include "kubeplay.downwardEnv" . | nindent 16 }}
+                {{- if .Values.tracing.enabled }}
+                {{- include "kubeplay.tracingEnv" . | nindent 16 }}
+                {{- end }}
               resources:
                 {{- toYaml $v.resources | nindent 16 }}
               securityContext:

@@ -4,6 +4,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const { createTracer, parseTraceparent, SPAN_KIND } = require('./tracing');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const API_ROUTE = /^\/api\/(inspector|notes)(\/.*)?$/;
@@ -50,7 +51,42 @@ async function probe(base, path) {
   }
 }
 
-function proxy(req, res, base, upstreamPath, search) {
+// SERVER span for the browser request + CLIENT span for the upstream call; the upstream continues the
+// trace through the W3C traceparent header. Dashboard background polling (X-KubePlay-Poll) is not sampled.
+function traceProxy(tracer, req, res, route, target, headers) {
+  const clientIp = req.socket.remoteAddress || '';
+  const server = tracer.startSpan(`${req.method} ${route}`, {
+    kind: SPAN_KIND.SERVER,
+    parent: parseTraceparent(req.headers.traceparent),
+    sampled: req.headers['x-kubeplay-poll'] === undefined,
+    attributes: {
+      'http.request.method': req.method,
+      'http.route': route,
+      'url.path': new URL(req.url, 'http://localhost').pathname,
+      'url.scheme': 'http',
+      'server.address': req.headers.host || '',
+      'client.address': clientIp,
+    },
+  });
+  const client = tracer.startSpan(req.method, {
+    kind: SPAN_KIND.CLIENT,
+    parent: server.ctx,
+    attributes: {
+      'http.request.method': req.method,
+      'url.full': `${target.origin}${target.pathname}`,
+      'server.address': target.hostname,
+      'server.port': Number(target.port || 80),
+    },
+  });
+  headers.traceparent = client.traceparent;
+  res.on('close', () => {
+    server.setAttribute('http.response.status_code', res.statusCode);
+    server.end({ error: res.statusCode >= 500 });
+  });
+  return { server, client };
+}
+
+function proxy(req, res, base, upstreamPath, search, tracer, route) {
   // Only the path/query come from the client, so the upstream host can't be overridden (no SSRF).
   const target = new URL(base);
   target.pathname = upstreamPath;
@@ -61,14 +97,25 @@ function proxy(req, res, base, upstreamPath, search) {
   headers['x-forwarded-for'] = req.headers['x-forwarded-for'] ? `${req.headers['x-forwarded-for']}, ${clientIp}` : clientIp;
   headers['x-forwarded-host'] = req.headers.host || '';
   headers['x-kubeplay-gateway'] = podName();
+  const spans = tracer.enabled ? traceProxy(tracer, req, res, route, target, headers) : null;
+  if (spans && spans.server.ctx.sampled) res.setHeader('x-trace-id', spans.server.ctx.traceId);
 
   // agent:false opens a new connection per request so kube-proxy/Docker DNS spread calls across pods.
   const upstreamReq = http.request(target, { method: req.method, headers, timeout: 35_000, agent: false }, (upRes) => {
-    res.writeHead(upRes.statusCode, upRes.headers);
+    const resHeaders = { ...upRes.headers };
+    if (spans) {
+      spans.client.setAttribute('http.response.status_code', upRes.statusCode);
+      upRes.on('end', () => spans.client.end({ error: upRes.statusCode >= 400 }));
+    }
+    res.writeHead(upRes.statusCode, resHeaders);
     upRes.pipe(res);
   });
   upstreamReq.on('timeout', () => upstreamReq.destroy(new Error('upstream timeout')));
   upstreamReq.on('error', (err) => {
+    if (spans) {
+      spans.client.setAttribute('error.type', err.code || err.message);
+      spans.client.end({ error: true });
+    }
     if (res.headersSent) return res.destroy();
     sendJSON(res, 502, { error: 'bad gateway', upstream: base, detail: err.message, gateway: podName() });
   });
@@ -99,7 +146,7 @@ function serveStatic(req, res, pathname) {
   });
 }
 
-function createApp(cfg = loadConfig()) {
+function createApp(cfg = loadConfig(), tracer = createTracer()) {
   return http.createServer((req, res) => {
     const { pathname, search } = new URL(req.url, 'http://localhost');
 
@@ -131,7 +178,7 @@ function createApp(cfg = loadConfig()) {
     }
     const match = API_ROUTE.exec(pathname);
     if (match) {
-      return proxy(req, res, cfg.upstreams[match[1]], match[2] || '/', search);
+      return proxy(req, res, cfg.upstreams[match[1]], match[2] || '/', search, tracer, `/api/${match[1]}/*`);
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return sendJSON(res, 405, { error: 'method not allowed' });
@@ -142,13 +189,15 @@ function createApp(cfg = loadConfig()) {
 
 if (require.main === module) {
   const cfg = loadConfig();
-  const server = createApp(cfg);
+  // Tracing is off unless OTEL_EXPORTER_OTLP_ENDPOINT points at an OpenTelemetry Collector.
+  const tracer = createTracer();
+  const server = createApp(cfg, tracer);
   server.listen(cfg.port, () => {
     console.log(JSON.stringify({ msg: 'ui-gateway listening', port: cfg.port, upstreams: cfg.upstreams }));
   });
   const shutdown = (signal) => {
     console.log(JSON.stringify({ msg: `${signal} received, closing server` }));
-    server.close(() => process.exit(0));
+    server.close(() => tracer.shutdown().finally(() => process.exit(0)));
     setTimeout(() => process.exit(0), 10_000).unref();
   };
   process.on('SIGTERM', shutdown);

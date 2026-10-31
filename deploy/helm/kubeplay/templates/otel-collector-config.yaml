@@ -1,0 +1,51 @@
+{{- if .Values.tracing.enabled }}
+{{- $v := .Values.tracing }}
+{{- if $v.connectionString }}
+# Created from tracing.connectionString; otherwise create it with `make appinsights-secret`.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: appinsights
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "otel-collector") | nindent 4 }}
+type: Opaque
+stringData:
+  connection-string: {{ $v.connectionString | quote }}
+---
+{{- end }}
+# Receives OTLP/HTTP spans from every KubePlay service and forwards them to Application Insights.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "otel-collector") | nindent 4 }}
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      batch: {}
+    exporters:
+      azure_monitor:
+        connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
+      debug:
+        verbosity: basic
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [azure_monitor, debug]
+{{- end }}

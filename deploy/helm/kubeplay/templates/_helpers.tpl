@@ -51,3 +51,8 @@ capabilities:
       name: redis-auth
       key: password
 {{- end }}
+
+{{- define "kubeplay.tracingEnv" -}}
+- name: OTEL_EXPORTER_OTLP_ENDPOINT
+  value: http://otel-collector:4318
+{{- end }}

@@ -19,6 +19,20 @@ images:
     newTag: 0.1.1
 patches:
   - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (inspector-api,notes-api,worker,ui-gateway)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: CronJob
+      name: worker-report
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
       kind: Ingress
       name: kubeplay
     patch: |-

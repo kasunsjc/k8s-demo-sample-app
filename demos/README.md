@@ -103,3 +103,15 @@ curl -X POST "$KP/anything/orders?id=7" -H 'Content-Type: application/json' -d '
 curl "$KP/headers"; curl "$KP/ip"; curl "$KP/metrics"
 open http://localhost:8088/api/notes/docs     # FastAPI Swagger UI
 ```
+
+## 12. Distributed tracing with Application Insights
+Requires tracing to be deployed (`make aks-deploy-kustomize ACR=<acr> APPINSIGHTS_CONNECTION_STRING='...'`, see the README).
+```sh
+kubectl get deploy,svc otel-collector -n kubeplay
+curl -s "$KP/headers" | grep -i traceparent       # the gateway injected a W3C traceparent
+curl -si "$KP/status/500" | grep -i x-trace-id    # a failed request to find in Trace Analytics
+kubectl logs deploy/otel-collector -n kubeplay --tail=5   # "Traces ... spans: N"
+```
+In the dashboard, add a note and enqueue a *report* job: the activity log and the job result show the same trace ID.
+In the Application Insights resource open *Monitoring → Traces* and search for that ID. One trace spans
+`ui-gateway` → `notes-api` → Redis (`RPUSH`) → `worker` (`process report`), with each span's `k8s.pod.name` showing which pod did the work.

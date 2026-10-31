@@ -3,6 +3,7 @@
 global:
   imageRegistry: ACR_NAME.azurecr.io
   imageTag: "0.1.1"
+  imagePullPolicy: Always
 ui:
   title: KubePlay on AKS
 redis:
@@ -11,3 +12,7 @@ redis:
 ingress:
   enabled: true
   className: webapprouting.kubernetes.azure.com
+# Distributed tracing to Application Insights. `make aks-deploy-helm ACR=<acr> APPINSIGHTS_CONNECTION_STRING='...'`
+# creates the appinsights Secret and sets tracing.enabled=true.
+tracing:
+  enabled: false

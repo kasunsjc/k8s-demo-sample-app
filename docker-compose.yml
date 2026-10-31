@@ -4,6 +4,10 @@ x-redis-env: &redis-env
   REDIS_PORT: "6379"
   REDIS_PASSWORD: kubeplay-demo-password
 
+# Tracing is off unless OTEL_EXPORTER_OTLP_ENDPOINT is set (make compose-tracing).
+x-tracing-env: &tracing-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+
 services:
   redis:
     image: redis:7.4-alpine
@@ -17,6 +21,7 @@ services:
     deploy:
       replicas: 3
     environment:
+      <<: *tracing-env
       APP_VERSION: v1-compose
       APP_COLOR: "#22c55e"
       CONFIG_DIR: /etc/kubeplay/config
@@ -28,7 +33,7 @@ services:
   notes-api:
     build: services/notes-api
     environment:
-      <<: *redis-env
+      <<: [*redis-env, *tracing-env]
       ROOT_PATH: /api/notes
     depends_on: [redis]
     ports:
@@ -36,18 +41,30 @@ services:
 
   worker:
     build: services/worker
-    environment: *redis-env
+    environment:
+      <<: [*redis-env, *tracing-env]
     depends_on: [redis]
 
   ui-gateway:
     build: services/ui-gateway
     environment:
+      <<: *tracing-env
       INSPECTOR_URL: http://inspector-api:8080
       NOTES_URL: http://notes-api:8000
       UI_TITLE: KubePlay (compose)
     depends_on: [inspector-api, notes-api]
     ports:
       - "3000:3000"
+
+  # Only started with `--profile tracing`; exports spans to Application Insights and logs them (debug exporter).
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    profiles: [tracing]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING:-}
+    volumes:
+      - ./deploy/kustomize/components/tracing/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
 
 volumes:
   redis-data:

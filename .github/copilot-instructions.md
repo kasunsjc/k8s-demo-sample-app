@@ -8,6 +8,7 @@ KubePlay is a polyglot demo app for teaching Kubernetes. Every feature should ma
 - `services/notes-api` — Python 3.12 FastAPI + Redis.
 - `services/worker` — Python 3.12; modes `consume` (Deployment), `report` (CronJob), `seed` (Job).
 - Redis StatefulSet is the only stateful component. Redis keys: `kubeplay:notes`, `kubeplay:jobs`, `kubeplay:results`.
+- Optional tracing: services send OpenTelemetry spans (OTLP/HTTP) to `otel-collector`, which exports to Azure Application Insights. Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; Go/Node use their built-in `tracing.go`/`tracing.js` (no SDK deps), Python uses the OpenTelemetry SDK. New workloads must get the env from the Kustomize `components/tracing` patches and the Helm `kubeplay.tracingEnv` helper.
 - Services reach each other via plain Service DNS names (`http://inspector-api`, `redis`). Resource names are fixed (one release per namespace).
 
 ## Deployment artifacts must stay in sync

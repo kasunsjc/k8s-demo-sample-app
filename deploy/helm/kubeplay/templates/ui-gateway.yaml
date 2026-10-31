@@ -36,6 +36,9 @@ spec:
             - name: NOTES_URL
               value: http://notes-api
             {{- include "kubeplay.downwardEnv" . | nindent 12 }}
+            {{- if .Values.tracing.enabled }}
+            {{- include "kubeplay.tracingEnv" . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml $v.resources | nindent 12 }}
           readinessProbe:

@@ -15,6 +15,8 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	cfg := loadConfig()
 	s := NewServer(cfg)
+	// Tracing is off unless OTEL_EXPORTER_OTLP_ENDPOINT points at an OpenTelemetry Collector.
+	s.tracer = newTracerFromEnv(cfg.Version)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -44,5 +46,6 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown failed", "err", err)
 	}
+	s.tracer.Shutdown(shutdownCtx)
 	slog.Info("shutdown complete")
 }
