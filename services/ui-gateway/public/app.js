@@ -21,8 +21,8 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
-async function api(method, url, body) {
-  const opts = { method, headers: {} };
+async function api(method, url, body, headers = {}) {
+  const opts = { method, headers: { ...headers } };
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = typeof body === 'string' ? body : JSON.stringify(body);
@@ -32,7 +32,9 @@ async function api(method, url, body) {
   const text = await res.text();
   let data = text;
   try { data = JSON.parse(text); } catch { /* plain text */ }
-  return { status: res.status, data, headers: res.headers, ms: Math.round(performance.now() - start) };
+  // x-trace-id is set by the gateway when tracing is enabled; search for it in Application Insights.
+  const traceId = res.headers.get('x-trace-id');
+  return { status: res.status, data, headers: res.headers, ms: Math.round(performance.now() - start), traceId };
 }
 
 function log(message, ok = true) {
@@ -46,6 +48,7 @@ function log(message, ok = true) {
 
 const fmtUptime = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
   : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`);
+const traceSuffix = (traceId) => (traceId ? ` · trace ${traceId}` : '');
 const orDash = (v) => (v === undefined || v === null || v === 'unknown' || v === 'unset' ? '–' : v);
 
 // ---- Header: gateway info + health (retried, so it recovers if upstreams start late) ----
@@ -87,7 +90,8 @@ async function loadHealth() {
 async function pollFleet() {
   if (!$('#polling').checked) return;
   try {
-    const { status, data } = await api('GET', '/api/inspector/whoami');
+    // Marked as background polling so the gateway does not sample it into traces.
+    const { status, data } = await api('GET', '/api/inspector/whoami', undefined, { 'X-KubePlay-Poll': 'fleet' });
     if (status !== 200 || typeof data !== 'object') return;
     const entry = pods.get(data.pod) || { hits: 0, firstSeen: Date.now() };
     entry.info = data;
@@ -149,9 +153,9 @@ document.querySelectorAll('button[data-url]').forEach((btn) => {
     const { method, url } = btn.dataset;
     btn.disabled = true;
     try {
-      const { status, data, ms } = await api(method, url);
+      const { status, data, ms, traceId } = await api(method, url);
       const pod = data && (data.pod || data.servedBy);
-      log(`${method} ${url} → ${status} in ${ms} ms${pod ? ` (pod ${pod})` : ''}${data && data.effect ? ` — ${data.effect}` : ''}`, status < 400);
+      log(`${method} ${url} → ${status} in ${ms} ms${pod ? ` (pod ${pod})` : ''}${data && data.effect ? ` — ${data.effect}` : ''}${traceSuffix(traceId)}`, status < 400);
     } catch (err) {
       log(`${method} ${url} failed: ${err.message}`, false);
     } finally {
@@ -198,12 +202,12 @@ $('#explorer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const { method, url, body } = explorerRequest();
   try {
-    const { status, data, headers, ms } = await api(method, url, body);
+    const { status, data, headers, ms, traceId } = await api(method, url, body);
     const type = headers.get('content-type') || '–';
     $('#ex-meta').className = `meta small ${status < 400 ? '' : 'bad'}`;
-    $('#ex-meta').textContent = `${method} ${url} → HTTP ${status} · ${ms} ms · ${type}`;
+    $('#ex-meta').textContent = `${method} ${url} → HTTP ${status} · ${ms} ms · ${type}${traceSuffix(traceId)}`;
     $('#ex-out').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-    log(`${method} ${url} → ${status} in ${ms} ms`, status < 400);
+    log(`${method} ${url} → ${status} in ${ms} ms${traceSuffix(traceId)}`, status < 400);
   } catch (err) {
     $('#ex-meta').textContent = `Request failed: ${err.message}`;
   }
@@ -252,8 +256,8 @@ async function loadNotes() {
 
 $('#note-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const { status, data, ms } = await api('POST', '/api/notes/notes', { title: $('#note-title').value, body: $('#note-body').value });
-  log(`created note → ${status} in ${ms} ms${data && data.createdBy ? ` (pod ${data.createdBy})` : ''}`, status < 400);
+  const { status, data, ms, traceId } = await api('POST', '/api/notes/notes', { title: $('#note-title').value, body: $('#note-body').value });
+  log(`created note → ${status} in ${ms} ms${data && data.createdBy ? ` (pod ${data.createdBy})` : ''}${traceSuffix(traceId)}`, status < 400);
   if (status < 400) e.target.reset();
   loadNotes();
 });
@@ -261,8 +265,8 @@ $('#note-form').addEventListener('submit', async (e) => {
 // ---- Jobs ----
 document.querySelectorAll('button[data-job]').forEach((btn) => {
   btn.addEventListener('click', async () => {
-    const { status, data } = await api('POST', '/api/notes/jobs', { type: btn.dataset.job, seconds: 10 });
-    log(`enqueued ${btn.dataset.job} job → ${status}${data && data.queueLength !== undefined ? ` (queue ${data.queueLength})` : ''}`, status < 400);
+    const { status, data, traceId } = await api('POST', '/api/notes/jobs', { type: btn.dataset.job, seconds: 10 });
+    log(`enqueued ${btn.dataset.job} job → ${status}${data && data.queueLength !== undefined ? ` (queue ${data.queueLength})` : ''}${traceSuffix(traceId)}`, status < 400);
     loadJobs();
   });
 });
@@ -281,7 +285,7 @@ async function loadJobs() {
       list.append(el('li', {},
         el('div', { className: 'grow' },
           el('strong', { textContent: j.type || 'job' }),
-          el('div', { className: 'muted small', textContent: `${j.processedBy} · ${j.finishedAt ? new Date(j.finishedAt).toLocaleTimeString() : ''}` }),
+          el('div', { className: 'muted small', textContent: `${j.processedBy} · ${j.finishedAt ? new Date(j.finishedAt).toLocaleTimeString() : ''}${traceSuffix(j.traceId)}` }),
           el('div', { className: 'muted small mono', textContent: JSON.stringify(j.output || j.error || {}) })),
         el('span', { className: `pill ${j.status === 'done' ? 'ok' : 'down'}`, textContent: j.status })));
     }

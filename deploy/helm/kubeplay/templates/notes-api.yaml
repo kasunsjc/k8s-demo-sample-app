@@ -54,6 +54,9 @@ spec:
               value: /api/notes
             {{- include "kubeplay.redisEnv" . | nindent 12 }}
             {{- include "kubeplay.downwardEnv" . | nindent 12 }}
+            {{- if .Values.tracing.enabled }}
+            {{- include "kubeplay.tracingEnv" . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml $v.resources | nindent 12 }}
           readinessProbe:

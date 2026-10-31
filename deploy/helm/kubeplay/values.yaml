@@ -87,3 +87,16 @@ ingress:
 
 networkPolicy:
   enabled: true
+
+# Distributed tracing to Azure Monitor Application Insights (Azure Monitor traces / Trace Analytics preview).
+# Services send OTLP spans to an OpenTelemetry Collector, which exports them with the azure_monitor exporter.
+tracing:
+  enabled: false
+  # Application Insights connection string. Leave empty to use an existing Secret named `appinsights`
+  # with key `connection-string` (make appinsights-secret APPINSIGHTS_CONNECTION_STRING='...').
+  connectionString: ""
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.164.0
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 500m, memory: 256Mi}

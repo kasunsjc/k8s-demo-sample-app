@@ -11,3 +11,7 @@ redis:
 ingress:
   enabled: true
   className: webapprouting.kubernetes.azure.com
+# Distributed tracing to Application Insights. `make aks-deploy-helm ACR=<acr> APPINSIGHTS_CONNECTION_STRING='...'`
+# creates the appinsights Secret and sets tracing.enabled=true.
+tracing:
+  enabled: false

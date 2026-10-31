@@ -1,0 +1,9 @@
+# AKS + distributed tracing to Application Insights.
+# `make aks-deploy-kustomize ACR=<name> APPINSIGHTS_CONNECTION_STRING='...'` creates the appinsights Secret and applies this overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kubeplay
+resources:
+  - ../aks
+components:
+  - ../../components/tracing

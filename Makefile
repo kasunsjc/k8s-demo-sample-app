@@ -12,11 +12,14 @@ BUILDER        ?= kubeplay-builder
 LOCAL_PLATFORM := linux/$(shell docker version -f '{{.Server.Arch}}' 2>/dev/null || echo amd64)
 SERVICES  := inspector-api notes-api worker ui-gateway
 CHART     := deploy/helm/kubeplay
+# Application Insights connection string; when set, AKS deploys add the OpenTelemetry Collector (tracing).
+APPINSIGHTS_CONNECTION_STRING ?=
+AKS_OVERLAY := $(if $(APPINSIGHTS_CONNECTION_STRING),aks-tracing,aks)
 METRICS_SERVER_URL := https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
-.PHONY: help test build compose-up compose-down kind-up kind-down kind-destroy kind-load metrics-server \
+.PHONY: help test build compose-up compose-tracing compose-down kind-up kind-down kind-destroy kind-load metrics-server \
         deploy-kustomize deploy-helm undeploy-kustomize undeploy-helm lint \
-        aks-push aks-deploy-kustomize aks-deploy-helm dockerhub-push buildx-clean
+        aks-push aks-deploy-kustomize aks-deploy-helm dockerhub-push buildx-clean appinsights-secret
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
@@ -33,8 +36,13 @@ build: ## Build all images as kubeplay/<svc>:$(TAG) for the local Docker/kind ar
 compose-up: ## Run everything with docker compose (UI on :3000)
 	docker compose up --build -d
 
+compose-tracing: ## Docker compose + OpenTelemetry Collector sending traces to Application Insights (APPINSIGHTS_CONNECTION_STRING=...)
+	@test -n "$$APPINSIGHTS_CONNECTION_STRING" || (echo "Set APPINSIGHTS_CONNECTION_STRING to the Application Insights connection string" && exit 1)
+	APPLICATIONINSIGHTS_CONNECTION_STRING="$$APPINSIGHTS_CONNECTION_STRING" OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 \
+	  docker compose --profile tracing up --build -d
+
 compose-down: ## Stop docker compose and remove volumes
-	docker compose down -v
+	docker compose --profile tracing down -v
 
 # Docker Hub has no nested repos, so images are pushed as <user>/kubeplay-<svc>.
 dockerhub-push: ## Build linux/amd64 images and push to Docker Hub (DOCKERHUB_USER=<user> [DOCKERHUB_TAG=0.1.1])
@@ -100,6 +108,8 @@ lint: ## Lint Helm chart and render Kustomize overlays
 	helm lint $(CHART) -f $(CHART)/values-aks.yaml
 	kubectl kustomize deploy/kustomize/overlays/local > /dev/null
 	kubectl kustomize deploy/kustomize/overlays/aks > /dev/null
+	kubectl kustomize deploy/kustomize/overlays/aks-tracing > /dev/null
+	helm template kubeplay $(CHART) -f $(CHART)/values-aks.yaml --set tracing.enabled=true > /dev/null
 
 check-acr:
 	@test -n "$(ACR)" || (echo "Set ACR=<registry name>, e.g. make aks-push ACR=myacr" && exit 1)
@@ -107,9 +117,18 @@ check-acr:
 aks-push: check-acr ## Build in ACR (no local Docker needed)
 	@for s in $(SERVICES); do az acr build -r $(ACR) -t kubeplay/$$s:$(AKS_TAG) services/$$s || exit 1; done
 
-aks-deploy-kustomize: check-acr ## Deploy AKS overlay with images from $(ACR)
-	kubectl kustomize deploy/kustomize/overlays/aks | sed 's#ACR_NAME.azurecr.io#$(ACR).azurecr.io#g' | kubectl apply -f -
+appinsights-secret: ## Create/update the appinsights Secret for the OpenTelemetry Collector (APPINSIGHTS_CONNECTION_STRING=...)
+	@test -n "$$APPINSIGHTS_CONNECTION_STRING" || (echo "Set APPINSIGHTS_CONNECTION_STRING to the Application Insights connection string" && exit 1)
+	@kubectl create namespace $(NS) --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+	@kubectl create secret generic appinsights -n $(NS) --from-literal=connection-string="$$APPINSIGHTS_CONNECTION_STRING" \
+	  --dry-run=client -o yaml | kubectl apply -f -
 
-aks-deploy-helm: check-acr ## Deploy to AKS with Helm
+aks-deploy-kustomize: check-acr ## Deploy AKS overlay with images from $(ACR) (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
+	$(if $(APPINSIGHTS_CONNECTION_STRING),@$(MAKE) --no-print-directory appinsights-secret)
+	kubectl kustomize deploy/kustomize/overlays/$(AKS_OVERLAY) | sed 's#ACR_NAME.azurecr.io#$(ACR).azurecr.io#g' | kubectl apply -f -
+
+aks-deploy-helm: check-acr ## Deploy to AKS with Helm (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
+	$(if $(APPINSIGHTS_CONNECTION_STRING),@$(MAKE) --no-print-directory appinsights-secret)
 	helm upgrade --install kubeplay $(CHART) -n $(NS) --create-namespace \
-	  -f $(CHART)/values-aks.yaml --set global.imageRegistry=$(ACR).azurecr.io --set global.imageTag=$(AKS_TAG)
+	  -f $(CHART)/values-aks.yaml --set global.imageRegistry=$(ACR).azurecr.io --set global.imageTag=$(AKS_TAG) \
+	  $(if $(APPINSIGHTS_CONNECTION_STRING),--set tracing.enabled=true)

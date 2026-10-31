@@ -92,6 +92,9 @@ spec:
             - name: SHUTDOWN_DELAY_SECONDS
               value: {{ $v.shutdownDelaySeconds | quote }}
             {{- include "kubeplay.downwardEnv" . | nindent 12 }}
+            {{- if .Values.tracing.enabled }}
+            {{- include "kubeplay.tracingEnv" . | nindent 12 }}
+            {{- end }}
             - name: POD_IP
               valueFrom:
                 fieldRef:

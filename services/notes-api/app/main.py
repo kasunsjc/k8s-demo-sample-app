@@ -9,6 +9,14 @@ from typing import Callable, Literal
 import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from opentelemetry import propagate, trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
+from opentelemetry.instrumentation.utils import suppress_instrumentation
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
@@ -41,19 +49,47 @@ def redis_from_env() -> aioredis.Redis:
     )
 
 
+def tracer_provider_from_env() -> TracerProvider | None:
+    """OpenTelemetry tracing is off unless OTEL_EXPORTER_OTLP_ENDPOINT points at an OpenTelemetry Collector."""
+    if not (os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT") or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")):
+        return None
+    resource = Resource.create({
+        "service.name": "notes-api",
+        "service.version": APP_VERSION,
+        # Becomes cloud_RoleInstance in Application Insights.
+        "service.instance.id": POD_NAME,
+        "k8s.pod.name": POD_NAME,
+        "k8s.namespace.name": os.getenv("POD_NAMESPACE", "unknown"),
+        "k8s.node.name": os.getenv("NODE_NAME", "unknown"),
+    })
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(provider)
+    return provider
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_app(redis_factory: Callable[[], aioredis.Redis] = redis_from_env) -> FastAPI:
+def create_app(
+    redis_factory: Callable[[], aioredis.Redis] = redis_from_env,
+    tracer_provider: TracerProvider | None = None,
+) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.redis = redis_factory()
         yield
         await app.state.redis.aclose()
+        if tracer_provider is not None:
+            tracer_provider.shutdown()  # flush queued spans before the pod exits
 
     # ROOT_PATH lets Swagger UI work behind the gateway prefix (/api/notes).
     app = FastAPI(title="KubePlay Notes API", version=APP_VERSION, lifespan=lifespan, root_path=os.getenv("ROOT_PATH", ""))
+    if tracer_provider is not None:
+        # SERVER spans continue the gateway's traceparent; every Redis command becomes a child CLIENT span.
+        FastAPIInstrumentor.instrument_app(app, tracer_provider=tracer_provider, excluded_urls="healthz,readyz")
+        RedisInstrumentor().instrument(tracer_provider=tracer_provider)
 
     def db(request: Request) -> aioredis.Redis:
         return request.app.state.redis
@@ -84,7 +120,9 @@ def create_app(redis_factory: Callable[[], aioredis.Redis] = redis_from_env) -> 
     async def readyz(request: Request, response: Response):
         # Readiness depends on Redis: if it is down, this pod leaves the Service but is not restarted.
         try:
-            await db(request).ping()
+            # Probe traffic is not traced.
+            with suppress_instrumentation():
+                await db(request).ping()
         except (RedisError, OSError):
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not ready", "reason": "redis unreachable"}
@@ -130,6 +168,11 @@ def create_app(redis_factory: Callable[[], aioredis.Redis] = redis_from_env) -> 
             "enqueuedAt": now(),
             "enqueuedBy": POD_NAME,
         }
+        # Carry the W3C trace context inside the job so the worker continues the same trace.
+        trace_context: dict[str, str] = {}
+        propagate.inject(trace_context)
+        if trace_context:
+            item["traceContext"] = trace_context
         r = db(request)
         await r.rpush(QUEUE_KEY, json.dumps(item))
         return {**item, "queueLength": await r.llen(QUEUE_KEY)}
@@ -143,4 +186,4 @@ def create_app(redis_factory: Callable[[], aioredis.Redis] = redis_from_env) -> 
     return app
 
 
-app = create_app()
+app = create_app(tracer_provider=tracer_provider_from_env())

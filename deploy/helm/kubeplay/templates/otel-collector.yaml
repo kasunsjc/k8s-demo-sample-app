@@ -1,0 +1,77 @@
+{{- if .Values.tracing.enabled }}
+{{- $v := .Values.tracing }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "otel-collector") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        {{- include "kubeplay.labels" (dict "root" . "name" "otel-collector") | nindent 8 }}
+      annotations:
+        # Roll the collector when its pipeline or connection string changes.
+        checksum/config: {{ include (print $.Template.BasePath "/otel-collector-config.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "kubeplay.podSecurityContext" 10001 | nindent 8 }}
+      containers:
+        - name: otel-collector
+          image: {{ $v.collector.image }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args: ["--config=/etc/otelcol/config.yaml"]
+          ports:
+            - name: otlp-http
+              containerPort: 4318
+            - name: health
+              containerPort: 13133
+          env:
+            - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: appinsights
+                  key: connection-string
+          resources:
+            {{- toYaml $v.collector.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 15
+          securityContext:
+            {{- include "kubeplay.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  labels:
+    {{- include "kubeplay.labels" (dict "root" . "name" "otel-collector") | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+{{- end }}

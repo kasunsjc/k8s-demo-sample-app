@@ -35,6 +35,7 @@ type Server struct {
 	memMu      sync.Mutex
 	memHog     [][]byte
 	metrics    *Metrics
+	tracer     *Tracer
 	exit       func(int)
 }
 
@@ -92,7 +93,21 @@ func (s *Server) instrument(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		// Probes and scrapes are not traced; everything else continues the caller's W3C trace.
+		traced := s.tracer != nil && !quietPaths[r.URL.Path]
+		var parent, sc SpanContext
+		var hasParent bool
+		if traced {
+			parent, hasParent = parseTraceparent(r.Header.Get("traceparent"))
+			sc = childSpanContext(parent, hasParent)
+			if sc.Sampled {
+				w.Header().Set("X-Trace-Id", sc.TraceID)
+			}
+		}
 		next.ServeHTTP(rec, r)
+		if traced && sc.Sampled {
+			s.tracer.record(serverSpan(sc, parent, hasParent, r, rec.status, start, time.Now()))
+		}
 		// ServeMux sets r.Pattern on the matched request.
 		route := r.Pattern
 		if route == "" {

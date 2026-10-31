@@ -1,0 +1,34 @@
+# Distributed tracing to Azure Monitor Application Insights (Azure Monitor traces / Trace Analytics).
+# Adds an OpenTelemetry Collector and points every KubePlay workload at it via OTEL_EXPORTER_OTLP_ENDPOINT.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - otel-collector.yaml
+configMapGenerator:
+  # Hash suffix: editing the pipeline rolls the collector.
+  - name: otel-collector
+    files:
+      - config.yaml=otel-collector-config.yaml
+    options:
+      labels:
+        app.kubernetes.io/name: otel-collector
+        app.kubernetes.io/part-of: kubeplay
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/name in (inspector-api,notes-api,ui-gateway,worker)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector:4318
+  - target:
+      kind: CronJob
+      name: worker-report
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector:4318

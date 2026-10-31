@@ -31,6 +31,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            {{- if .Values.tracing.enabled }}
+            {{- include "kubeplay.tracingEnv" . | nindent 12 }}
+            {{- end }}
           livenessProbe:
             exec:
               command: ["python", "healthcheck.py"]
@@ -84,6 +87,9 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.name
+                {{- if .Values.tracing.enabled }}
+                {{- include "kubeplay.tracingEnv" . | nindent 16 }}
+                {{- end }}
               resources:
                 {{- toYaml $v.resources | nindent 16 }}
               securityContext:

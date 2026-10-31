@@ -34,6 +34,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            {{- if .Values.tracing.enabled }}
+            {{- include "kubeplay.tracingEnv" . | nindent 12 }}
+            {{- end }}
           securityContext:
             {{- include "kubeplay.containerSecurityContext" . | nindent 12 }}
 {{- end }}
