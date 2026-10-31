@@ -115,6 +115,8 @@ make aks-deploy-kustomize ACR=myacr        # or: make aks-deploy-helm ACR=myacr
 kubectl get ingress kubeplay -n kubeplay   # open the ADDRESS
 ```
 
+AKS workloads use `imagePullPolicy: Always`, so newly created pods pull updated images even when an existing tag is reused.
+
 ### Distributed tracing with Application Insights
 
 Every service emits OpenTelemetry spans so one click in the dashboard becomes a single end-to-end trace — browser → `ui-gateway` → `inspector-api` / `notes-api` → Redis → `worker` (the W3C `traceparent` travels in HTTP headers and inside queued jobs). Spans go over OTLP/HTTP to an OpenTelemetry Collector, whose `azure_monitor` exporter sends them to Application Insights, ready for the [Azure Monitor traces / Trace Analytics preview](https://learn.microsoft.com/en-us/azure/azure-monitor/app/traces-overview).

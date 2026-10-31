@@ -2,6 +2,7 @@
 # Adds an OpenTelemetry Collector and points every KubePlay workload at it via OTEL_EXPORTER_OTLP_ENDPOINT.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
+namespace: kubeplay
 resources:
   - otel-collector.yaml
 configMapGenerator:

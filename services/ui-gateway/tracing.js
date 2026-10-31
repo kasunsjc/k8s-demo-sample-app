@@ -95,7 +95,7 @@ function createTracer(env = process.env, { fetchImpl = globalThis.fetch, log = c
     const ctx = {
       traceId: parent ? parent.traceId : randomHex(16),
       spanId: randomHex(8),
-      sampled: parent ? parent.sampled : sampled,
+      sampled: sampled && (!parent || parent.sampled),
     };
     const start = nowNanos();
     let ended = false;

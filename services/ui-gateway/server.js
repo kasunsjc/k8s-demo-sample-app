@@ -73,7 +73,7 @@ function traceProxy(tracer, req, res, route, target, headers) {
     parent: server.ctx,
     attributes: {
       'http.request.method': req.method,
-      'url.full': target.href,
+      'url.full': `${target.origin}${target.pathname}`,
       'server.address': target.hostname,
       'server.port': Number(target.port || 80),
     },
@@ -105,7 +105,7 @@ function proxy(req, res, base, upstreamPath, search, tracer, route) {
     const resHeaders = { ...upRes.headers };
     if (spans) {
       spans.client.setAttribute('http.response.status_code', upRes.statusCode);
-      upRes.on('end', () => spans.client.end({ error: upRes.statusCode >= 500 }));
+      upRes.on('end', () => spans.client.end({ error: upRes.statusCode >= 400 }));
     }
     res.writeHead(upRes.statusCode, resHeaders);
     upRes.pipe(res);

@@ -38,10 +38,7 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func isHex(s string, n int) bool {
-	if len(s) != n || strings.Trim(s, "0") == "" {
-		return false
-	}
+func isLowerHex(s string) bool {
 	for _, c := range s {
 		if !strings.ContainsRune("0123456789abcdef", c) {
 			return false
@@ -50,10 +47,15 @@ func isHex(s string, n int) bool {
 	return true
 }
 
+func isHex(s string, n int) bool {
+	return len(s) == n && strings.Trim(s, "0") != "" && isLowerHex(s)
+}
+
 // parseTraceparent parses a W3C traceparent header: 00-<trace-id>-<parent-id>-<flags>.
 func parseTraceparent(h string) (SpanContext, bool) {
 	parts := strings.Split(strings.TrimSpace(h), "-")
-	if len(parts) < 4 || len(parts[0]) != 2 || parts[0] == "ff" || len(parts[3]) != 2 {
+	if len(parts) < 4 || len(parts[0]) != 2 || !isLowerHex(parts[0]) || parts[0] == "ff" ||
+		len(parts[3]) != 2 || !isLowerHex(parts[3]) {
 		return SpanContext{}, false
 	}
 	if parts[0] == "00" && len(parts) != 4 {

@@ -3,6 +3,7 @@
 global:
   imageRegistry: ACR_NAME.azurecr.io
   imageTag: "0.1.1"
+  imagePullPolicy: Always
 ui:
   title: KubePlay on AKS
 redis:
