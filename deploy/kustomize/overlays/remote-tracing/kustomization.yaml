@@ -1,0 +1,9 @@
+# Remote cluster + distributed tracing to Application Insights.
+# `make deploy-remote-kustomize REGISTRY=<registry> APPINSIGHTS_CONNECTION_STRING='...'` creates the appinsights Secret and applies this overlay.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kubeplay
+resources:
+  - ../remote
+components:
+  - ../../components/tracing

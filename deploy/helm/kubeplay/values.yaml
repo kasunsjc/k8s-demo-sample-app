@@ -1,102 +1,164 @@
+# KubePlay Helm chart — default values.
+# Every parameter the chart supports is listed here with its default and a description.
+# Override with `-f my-values.yaml` or `--set key=value`; see also values-local.yaml and values-remote.yaml.
+
+# -- Settings shared by every KubePlay workload.
 global:
-  # e.g. myacr.azurecr.io — prefixed to every kubeplay image.
+  # Registry host (plus optional repo prefix) prepended to every kubeplay image,
+  # e.g. "registry.example.com/myorg" -> registry.example.com/myorg/kubeplay/inspector-api:<tag>.
+  # Leave empty to use images as named (e.g. local images or Docker Hub).
   imageRegistry: ""
+  # Tag applied to every kubeplay image (inspector, notes, worker, ui). Not used for redis or the collector.
   imageTag: "0.1.1"
+  # Kubernetes imagePullPolicy for all containers: Always | IfNotPresent | Never.
   imagePullPolicy: IfNotPresent
 
+# -- inspector-api: Go service with Kubernetes-aware endpoints (probes, chaos, stress, config).
 inspector:
+  # Deploy inspector-api (Deployment, Service, ConfigMap, Secret, HPA, PDB).
   enabled: true
+  # Image repository (without registry/tag); combined with global.imageRegistry and global.imageTag.
   image: kubeplay/inspector-api
+  # Replica count. Ignored while hpa.enabled is true (the HPA manages replicas).
   replicas: 3
+  # Version string reported by the API (APP_VERSION); handy for rolling-update demos.
   version: v1
+  # Color shown for this service's pods in the dashboard (APP_COLOR).
   color: "#3b82f6"
+  # Message served from the ConfigMap env (APP_MESSAGE); changing it needs a pod restart.
   message: "Hello from KubePlay!"
+  # Seconds the pod waits before becoming ready (demonstrates startup/readiness probes).
   startupDelaySeconds: 3
+  # Seconds the pod keeps serving after SIGTERM (demonstrates graceful shutdown).
   shutdownDelaySeconds: 5
+  # JSON rendered into feature-flags.json in the ConfigMap and mounted as a file (hot-reloaded by kubelet).
+  # Any keys you add are written to the file as-is.
   featureFlags:
     newDashboard: false
     maxItems: 10
-  # Demo values only.
+  # Demo values only; written to a Secret and always shown masked by the API.
   secret:
     apiKey: demo-api-key-1234567890
     dbPassword: not-a-real-password
+  # Container CPU/memory requests and limits.
   resources:
     requests: {cpu: 50m, memory: 32Mi}
     limits: {cpu: 500m, memory: 256Mi}
+  # HorizontalPodAutoscaler (needs metrics-server).
   hpa:
     enabled: true
     minReplicas: 3
     maxReplicas: 10
+    # Target average CPU utilization (% of requests).
     cpuUtilization: 50
+  # PodDisruptionBudget (limits voluntary disruptions such as node drain).
   pdb:
     enabled: true
     minAvailable: 2
 
+# -- notes-api: FastAPI service storing notes and queueing jobs in Redis.
 notes:
+  # Deploy notes-api.
   enabled: true
+  # Image repository (without registry/tag).
   image: kubeplay/notes-api
+  # Replica count.
   replicas: 2
+  # Version string reported by the API (APP_VERSION).
   version: v1
+  # Container CPU/memory requests and limits.
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 500m, memory: 256Mi}
 
+# -- worker: consumes queued jobs (Deployment), reports (CronJob) and seeds notes (Job).
 worker:
+  # Deploy the worker (Deployment, CronJob and seed Job are controlled separately below).
   enabled: true
+  # Image repository (without registry/tag).
   image: kubeplay/worker
+  # Replica count of the consumer Deployment.
   replicas: 1
+  # Container CPU/memory requests and limits for the Deployment and CronJob.
   resources:
     requests: {cpu: 25m, memory: 48Mi}
     limits: {cpu: 250m, memory: 128Mi}
+  # Periodic report CronJob.
   cronjob:
     enabled: true
+    # Standard cron expression.
     schedule: "*/5 * * * *"
+  # One-off Job that seeds sample notes.
   seedJob:
     enabled: true
+    # Number of notes to create.
     count: 5
 
+# -- redis: the only stateful component (StatefulSet with a PVC).
 redis:
+  # Deploy Redis. Disable only if you provide your own and adjust the services accordingly.
   enabled: true
+  # Full image reference (not affected by global.imageRegistry/imageTag).
   image: redis:7.4-alpine
   # Demo credential only — use an external secret store for real workloads.
   password: kubeplay-demo-password
   storage:
+    # PVC size for Redis data.
     size: 1Gi
+    # StorageClass name; empty uses the cluster default.
     storageClass: ""
+  # Container CPU/memory requests and limits.
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 500m, memory: 256Mi}
 
+# -- ui-gateway: Node.js web dashboard that proxies the APIs.
 ui:
+  # Deploy the UI gateway.
   enabled: true
+  # Image repository (without registry/tag).
   image: kubeplay/ui-gateway
+  # Replica count.
   replicas: 2
+  # Version string reported by the gateway.
   version: v1
+  # Title shown in the dashboard header.
   title: KubePlay
   service:
+    # Service type: ClusterIP | NodePort | LoadBalancer.
     type: ClusterIP
+    # Fixed node port; only used when type is NodePort. null lets Kubernetes choose.
     nodePort: null
+  # Container CPU/memory requests and limits.
   resources:
     requests: {cpu: 25m, memory: 48Mi}
     limits: {cpu: 250m, memory: 128Mi}
 
+# -- Ingress exposing the UI gateway (requires ui.enabled).
 ingress:
+  # Create the Ingress.
   enabled: false
+  # ingressClassName of your controller (e.g. nginx); empty uses the cluster default class.
   className: ""
+  # Host rule; empty matches any host.
   host: ""
 
+# -- NetworkPolicies (default-deny style; Redis only accepts KubePlay clients). Needs a CNI that enforces them.
 networkPolicy:
   enabled: true
 
-# Distributed tracing to Azure Monitor Application Insights (Azure Monitor traces / Trace Analytics preview).
+# -- Distributed tracing to Azure Monitor Application Insights (Azure Monitor traces / Trace Analytics preview).
 # Services send OTLP spans to an OpenTelemetry Collector, which exports them with the azure_monitor exporter.
 tracing:
+  # Deploy the collector and set OTEL_EXPORTER_OTLP_ENDPOINT on every workload.
   enabled: false
   # Application Insights connection string. Leave empty to use an existing Secret named `appinsights`
   # with key `connection-string` (make appinsights-secret APPINSIGHTS_CONNECTION_STRING='...').
   connectionString: ""
   collector:
+    # Collector image (contrib distribution is required for the azure_monitor exporter).
     image: otel/opentelemetry-collector-contrib:0.164.0
+    # Container CPU/memory requests and limits.
     resources:
       requests: {cpu: 50m, memory: 64Mi}
       limits: {cpu: 500m, memory: 256Mi}

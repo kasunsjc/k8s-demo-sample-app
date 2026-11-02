@@ -1,7 +1,7 @@
 ---
 name: deploy-kubeplay
-description: "Build, deploy and troubleshoot KubePlay on kind, minikube, Docker Desktop or AKS using Kustomize or Helm. Use when: setting up a demo cluster, deploying or redeploying KubePlay, loading images into kind, pushing to ACR, pods not ready, CreateContainerConfigError, ImagePullBackOff, HPA shows unknown, UI not reachable on localhost:8088."
-argument-hint: "Target (kind | minikube | docker-desktop | aks) and method (kustomize | helm)"
+description: "Build, deploy and troubleshoot KubePlay on kind, minikube, Docker Desktop or any remote cluster using Kustomize or Helm. Use when: setting up a demo cluster, deploying or redeploying KubePlay, loading images into kind, pushing to a registry, pods not ready, CreateContainerConfigError, ImagePullBackOff, HPA shows unknown, UI not reachable on localhost:8088."
+argument-hint: "Target (kind | minikube | docker-desktop | remote) and method (kustomize | helm)"
 ---
 
 # Deploy KubePlay
@@ -23,11 +23,11 @@ After code changes: `make kind-load` then `kubectl rollout restart deploy/<svc> 
 Build into the cluster's runtime (`eval $(minikube docker-env)` then `make build`), deploy, then
 `kubectl port-forward svc/ui-gateway 8088:80 -n kubeplay`.
 
-## AKS
-Prereqs: ACR attached (`az aks update --attach-acr <acr>`), app routing enabled (`az aks approuting enable`), and a network policy engine for the NetworkPolicy demo.
+## Any remote cluster
+Prereqs: a registry the cluster can pull from, an ingress controller (optional), and a network policy engine for the NetworkPolicy demo.
 ```sh
-make aks-push ACR=<acr>
-make aks-deploy-kustomize ACR=<acr>      # or aks-deploy-helm
+make push REGISTRY=<registry/prefix>
+make deploy-remote-kustomize REGISTRY=<registry/prefix>      # or deploy-remote-helm
 kubectl get ingress kubeplay -n kubeplay
 ```
 
@@ -40,7 +40,7 @@ kubectl get ingress kubeplay -n kubeplay
 | notes-api stuck `Init:0/1` | Redis not ready or `redis-auth` secret mismatch: `kubectl logs <pod> -c wait-for-redis` |
 | HPA `cpu: <unknown>` | metrics-server missing/starting: `make metrics-server`, wait ~60s |
 | UI not on :8088 | Cluster not created with `deploy/kind/kind-config.yaml`; use port-forward instead |
-| NetworkPolicy not enforced | CNI doesn't support it (needs kind ≥ v0.24 or Azure/Cilium policy on AKS) |
-| PVC `Pending` on AKS | Wrong storage class; overlay uses `managed-csi` |
+| NetworkPolicy not enforced | CNI doesn't support it (needs kind ≥ v0.24 or a Calico/Cilium policy engine) |
+| PVC `Pending` | No default storage class; set `STORAGE_CLASS` (Helm) |
 
 Use `kubectl describe pod` (Events) and `kubectl logs --previous` before changing manifests.

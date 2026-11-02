@@ -1,25 +1,27 @@
 CLUSTER   ?= kubeplay
 NS        ?= kubeplay
 TAG       ?= dev
-ACR       ?=
-AKS_TAG   ?= 0.1.1
+REGISTRY  ?=
+IMAGE_TAG ?= 0.1.1
+STORAGE_CLASS ?=
+INGRESS_CLASS ?=
 DOCKERHUB_USER ?=
 DOCKERHUB_TAG  ?= 0.1.1
-# Registry images target amd64 (AKS/EKS/GKE); override with PLATFORMS=linux/amd64,linux/arm64 if needed.
+# Registry images target amd64 (most managed clusters); override with PLATFORMS=linux/amd64,linux/arm64 if needed.
 PLATFORMS      ?= linux/amd64
 BUILDER        ?= kubeplay-builder
 # kind nodes run on the Docker engine's native arch (arm64 on Apple Silicon), so local images must match it.
 LOCAL_PLATFORM := linux/$(shell docker version -f '{{.Server.Arch}}' 2>/dev/null || echo amd64)
 SERVICES  := inspector-api notes-api worker ui-gateway
 CHART     := deploy/helm/kubeplay
-# Application Insights connection string; when set, AKS deploys add the OpenTelemetry Collector (tracing).
+# Application Insights connection string; when set, remote deploys add the OpenTelemetry Collector (tracing).
 APPINSIGHTS_CONNECTION_STRING ?=
-AKS_OVERLAY := $(if $(APPINSIGHTS_CONNECTION_STRING),aks-tracing,aks)
+REMOTE_OVERLAY := $(if $(APPINSIGHTS_CONNECTION_STRING),remote-tracing,remote)
 METRICS_SERVER_URL := https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
 .PHONY: help test build compose-up compose-tracing compose-down kind-up kind-down kind-destroy kind-load metrics-server \
         deploy-kustomize deploy-helm undeploy-kustomize undeploy-helm lint \
-        aks-push aks-deploy-kustomize aks-deploy-helm dockerhub-push buildx-clean appinsights-secret
+        push deploy-remote-kustomize deploy-remote-helm dockerhub-push buildx-clean appinsights-secret
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
@@ -105,17 +107,26 @@ undeploy-helm: ## Uninstall the Helm release
 
 lint: ## Lint Helm chart and render Kustomize overlays
 	helm lint $(CHART) -f $(CHART)/values-local.yaml
-	helm lint $(CHART) -f $(CHART)/values-aks.yaml
+	helm lint $(CHART) -f $(CHART)/values-remote.yaml
 	kubectl kustomize deploy/kustomize/overlays/local > /dev/null
-	kubectl kustomize deploy/kustomize/overlays/aks > /dev/null
-	kubectl kustomize deploy/kustomize/overlays/aks-tracing > /dev/null
-	helm template kubeplay $(CHART) -f $(CHART)/values-aks.yaml --set tracing.enabled=true > /dev/null
+	kubectl kustomize deploy/kustomize/overlays/remote > /dev/null
+	kubectl kustomize deploy/kustomize/overlays/remote-tracing > /dev/null
+	helm template kubeplay $(CHART) -f $(CHART)/values-remote.yaml --set tracing.enabled=true > /dev/null
 
-check-acr:
-	@test -n "$(ACR)" || (echo "Set ACR=<registry name>, e.g. make aks-push ACR=myacr" && exit 1)
+check-registry:
+	@test -n "$(REGISTRY)" || (echo "Set REGISTRY=<registry/repo prefix>, e.g. make push REGISTRY=registry.example.com/myorg" && exit 1)
 
-aks-push: check-acr ## Build in ACR (no local Docker needed)
-	@for s in $(SERVICES); do az acr build -r $(ACR) -t kubeplay/$$s:$(AKS_TAG) services/$$s || exit 1; done
+push: check-registry ## Build and push images to $(REGISTRY)/kubeplay/<service>:$(IMAGE_TAG) (run docker login first)
+	@# A temporary docker-container builder handles cross-arch builds; it is removed afterwards even on failure.
+	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDER) --driver docker-container --bootstrap >/dev/null; \
+	rc=0; \
+	for s in $(SERVICES); do \
+	  docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) --push \
+	    -t $(REGISTRY)/kubeplay/$$s:$(IMAGE_TAG) \
+	    services/$$s || { rc=1; break; }; \
+	done; \
+	docker buildx rm $(BUILDER) >/dev/null 2>&1 && echo "Removed buildx builder $(BUILDER)"; \
+	exit $$rc
 
 appinsights-secret: ## Create/update the appinsights Secret for the OpenTelemetry Collector (APPINSIGHTS_CONNECTION_STRING=...)
 	@test -n "$$APPINSIGHTS_CONNECTION_STRING" || (echo "Set APPINSIGHTS_CONNECTION_STRING to the Application Insights connection string" && exit 1)
@@ -123,14 +134,16 @@ appinsights-secret: ## Create/update the appinsights Secret for the OpenTelemetr
 	@printf '%s' "$$APPINSIGHTS_CONNECTION_STRING" | kubectl create secret generic appinsights -n $(NS) --from-file=connection-string=/dev/stdin \
 	  --dry-run=client -o yaml | kubectl apply -f -
 
-aks-deploy-kustomize: check-acr ## Deploy AKS overlay with images from $(ACR) (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
+deploy-remote-kustomize: check-registry ## Deploy remote overlay with images from $(REGISTRY) (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
 	$(if $(APPINSIGHTS_CONNECTION_STRING),@$(MAKE) --no-print-directory appinsights-secret)
-	kubectl kustomize deploy/kustomize/overlays/$(AKS_OVERLAY) | sed 's#ACR_NAME.azurecr.io#$(ACR).azurecr.io#g' | kubectl apply -f -
+	kubectl kustomize deploy/kustomize/overlays/$(REMOTE_OVERLAY) | sed 's#REGISTRY_HOST#$(REGISTRY)#g; s#\(kubeplay/[a-z-]*\):0\.1\.1$$#\1:$(IMAGE_TAG)#' | kubectl apply -f -
 	$(if $(APPINSIGHTS_CONNECTION_STRING),kubectl rollout restart deployment/otel-collector -n $(NS))
 
-aks-deploy-helm: check-acr ## Deploy to AKS with Helm (+ tracing if APPINSIGHTS_CONNECTION_STRING is set)
+deploy-remote-helm: check-registry ## Deploy to any cluster with Helm (+ tracing if APPINSIGHTS_CONNECTION_STRING is set; optional STORAGE_CLASS, INGRESS_CLASS)
 	$(if $(APPINSIGHTS_CONNECTION_STRING),@$(MAKE) --no-print-directory appinsights-secret)
 	helm upgrade --install kubeplay $(CHART) -n $(NS) --create-namespace \
-	  -f $(CHART)/values-aks.yaml --set global.imageRegistry=$(ACR).azurecr.io --set global.imageTag=$(AKS_TAG) \
+	  -f $(CHART)/values-remote.yaml --set global.imageRegistry=$(REGISTRY) --set global.imageTag=$(IMAGE_TAG) \
+	  $(if $(STORAGE_CLASS),--set redis.storage.storageClass=$(STORAGE_CLASS)) \
+	  $(if $(INGRESS_CLASS),--set ingress.enabled=true --set ingress.className=$(INGRESS_CLASS)) \
 	  $(if $(APPINSIGHTS_CONNECTION_STRING),--set tracing.enabled=true)
 	$(if $(APPINSIGHTS_CONNECTION_STRING),kubectl rollout restart deployment/otel-collector -n $(NS))

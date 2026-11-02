@@ -9,5 +9,5 @@ applyTo: "deploy/**,demos/manifests/**"
 - Every container: requests + limits, probes appropriate to the workload, numeric `runAsUser`, `runAsNonRoot`, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true` (mount `emptyDir` where writes are needed), `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`, `automountServiceAccountToken: false` unless the API is needed.
 - Pods that talk to Redis must have their `app.kubernetes.io/name` added to the `redis-allow-clients` NetworkPolicy (both Kustomize and Helm).
 - The inspector ConfigMap intentionally has no hash suffix/checksum annotation — it demonstrates hot reload of mounted files vs. env vars.
-- Local overlay: NodePort 30080 (kind maps to localhost:8088), no Ingress. AKS: `ACR_NAME.azurecr.io` placeholder, `managed-csi`, `webapprouting.kubernetes.azure.com`.
+- Local overlay: NodePort 30080 (kind maps to localhost:8088), no Ingress. Remote overlay: `REGISTRY_HOST` image placeholder replaced by `make deploy-remote-kustomize REGISTRY=...`; no cloud-specific storage/ingress classes (Helm: `STORAGE_CLASS`/`INGRESS_CLASS`).
 - Validate with `make lint`; for Helm also `helm template kubeplay deploy/helm/kubeplay -f <values>`.

@@ -7,7 +7,7 @@ argument-hint: "Scenario name or number from demos/README.md"
 # Run a KubePlay demo scenario
 
 1. Confirm the target context (`kubectl config current-context`) and that all pods in `kubeplay` are Ready.
-2. Open [demos/README.md](../../../demos/README.md) and pick the scenario. Set `export KP=http://localhost:8088/api/inspector` (or the AKS ingress address).
+2. Open [demos/README.md](../../../demos/README.md) and pick the scenario. Set `export KP=http://localhost:8088/api/inspector` (or your ingress address).
 3. Before triggering, run a watch so the audience sees the change:
    `kubectl get pods,endpointslices,hpa -n kubeplay -w`
 4. Run the scenario commands one at a time. After each, explain:

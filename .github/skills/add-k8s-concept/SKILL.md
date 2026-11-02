@@ -23,7 +23,7 @@ argument-hint: "Kubernetes concept to demonstrate, e.g. 'sidecar container' or '
 - `deploy/kustomize/base/<service>.yaml`
 - `deploy/helm/kubeplay/templates/<service>.yaml` and, if configurable, `values.yaml` (feature toggle `enabled: true|false` for optional features)
 - Update NetworkPolicy if a new pod talks to Redis or notes-api.
-- Environment-specific differences go in `overlays/{local,aks}` and `values-{local,aks}.yaml`.
+- Environment-specific differences go in `overlays/{local,remote}` and `values-{local,remote}.yaml`.
 
 ## 4. Surface it in the UI (optional)
 - Add a button in `services/ui-gateway/public/index.html` using `data-method` + `data-url` (chaos) or `data-inspect` (read-only).
