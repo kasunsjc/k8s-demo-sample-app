@@ -79,7 +79,7 @@ Enqueue "slow" jobs in the UI and scale the consumer: `kubectl scale deploy/work
 On scale-down the worker finishes its current job before exiting (SIGTERM + `terminationGracePeriodSeconds`).
 
 ## 9. NetworkPolicy
-Requires a CNI that enforces policies (kind ≥ v0.24 kindnet, AKS with Azure/Cilium network policy).
+Requires a CNI that enforces policies (kind ≥ v0.24 kindnet, or a cluster with Calico/Cilium).
 ```sh
 kubectl apply -f demos/manifests/rogue-pod.yaml
 kubectl exec -n kubeplay rogue -- redis-cli -h redis -t 3 ping      # times out: blocked
@@ -105,7 +105,7 @@ open http://localhost:8088/api/notes/docs     # FastAPI Swagger UI
 ```
 
 ## 12. Distributed tracing with Application Insights
-Requires tracing to be deployed (`make aks-deploy-kustomize ACR=<acr> APPINSIGHTS_CONNECTION_STRING='...'`, see the README).
+Requires tracing to be deployed (`make deploy-remote-kustomize REGISTRY=<registry> APPINSIGHTS_CONNECTION_STRING='...'`, see the README).
 ```sh
 kubectl get deploy,svc otel-collector -n kubeplay
 curl -s "$KP/headers" | grep -i traceparent       # the gateway injected a W3C traceparent

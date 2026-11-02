@@ -1,0 +1,14 @@
+# Any remote cluster. Set the registry hosting your images:
+# helm upgrade --install kubeplay deploy/helm/kubeplay -n kubeplay --create-namespace \
+#   -f deploy/helm/kubeplay/values-remote.yaml --set global.imageRegistry=<registry>
+# Optionally set redis.storage.storageClass and ingress.enabled/ingress.className for your cluster.
+global:
+  imageRegistry: ""
+  imageTag: "0.1.1"
+  imagePullPolicy: Always
+ui:
+  title: KubePlay
+# Distributed tracing to Application Insights. `make deploy-remote-helm REGISTRY=<registry> APPINSIGHTS_CONNECTION_STRING='...'`
+# creates the appinsights Secret and sets tracing.enabled=true.
+tracing:
+  enabled: false

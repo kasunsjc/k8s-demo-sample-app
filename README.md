@@ -76,7 +76,7 @@ The gateway opens a new upstream connection per request (no keep-alive), so the 
 | Exec probe, emptyDir | `worker` heartbeat liveness |
 | NetworkPolicy | Only allowed pods reach Redis / notes-api |
 | Pod Security Admission, securityContext | Namespace labels, non-root read-only containers |
-| Ingress / NodePort | AKS app routing / kind port mapping |
+| Ingress / NodePort | Your cluster's ingress controller / kind port mapping |
 | Distributed tracing (OpenTelemetry → Application Insights) | `otel-collector`, `traceparent` in `GET /headers`, trace IDs in the activity log and job results |
 
 Step-by-step scenarios: [demos/README.md](demos/README.md).
@@ -105,17 +105,18 @@ The local overlay uses the Docker Hub images, which must include `linux/arm64` o
 
 Minikube / Docker Desktop: build with `make build` into the cluster's Docker daemon, deploy, then `kubectl port-forward svc/ui-gateway 8088:80 -n kubeplay`.
 
-### AKS
+### Any remote cluster
 
-Requires an AKS cluster attached to an ACR (`az aks update --attach-acr`) with the app routing add-on (`az aks approuting enable`).
+Requires a container registry your cluster can pull from (log in with `docker login`, and add an image pull secret if it is private). `REGISTRY` is the registry host plus optional repo prefix; images are named `$REGISTRY/kubeplay/<service>:$IMAGE_TAG`.
 
 ```sh
-make aks-push ACR=myacr                    # builds images in ACR
-make aks-deploy-kustomize ACR=myacr        # or: make aks-deploy-helm ACR=myacr
-kubectl get ingress kubeplay -n kubeplay   # open the ADDRESS
+make push REGISTRY=registry.example.com/myorg                    # builds and pushes images
+make deploy-remote-kustomize REGISTRY=registry.example.com/myorg # or: make deploy-remote-helm ...
+make deploy-remote-helm REGISTRY=registry.example.com/myorg STORAGE_CLASS=<class> INGRESS_CLASS=<class>  # both optional
+kubectl get ingress kubeplay -n kubeplay   # open the ADDRESS (Helm with INGRESS_CLASS)
 ```
 
-AKS workloads use `imagePullPolicy: Always`, so newly created pods pull updated images even when an existing tag is reused.
+Remote workloads use `imagePullPolicy: Always`, so newly created pods pull updated images even when an existing tag is reused.
 
 ### Distributed tracing with Application Insights
 
@@ -135,8 +136,8 @@ Tracing is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Probes, idle queue p
 
    ```sh
    export APPINSIGHTS_CONNECTION_STRING='InstrumentationKey=...;IngestionEndpoint=...'
-   make aks-push ACR=myacr                  # images must include the instrumentation
-   make aks-deploy-kustomize ACR=myacr      # uses overlays/aks-tracing; or: make aks-deploy-helm ACR=myacr
+   make push REGISTRY=registry.example.com/myorg                    # images must include the instrumentation
+   make deploy-remote-kustomize REGISTRY=registry.example.com/myorg # uses overlays/remote-tracing; or: make deploy-remote-helm ...
    make compose-tracing                     # alternative: run locally with Docker Compose
    ```
 
@@ -187,7 +188,7 @@ The workflow uses the built-in `GITHUB_TOKEN` to create releases. For manual run
 | Target | Images | Arch |
 | --- | --- | --- |
 | kind on your Mac | `make kind-load` (built locally) | native (arm64) |
-| AKS / EKS / GKE | `make dockerhub-push` or `make aks-push` | amd64 |
+| Remote clusters | `make dockerhub-push` or `make push` | amd64 |
 | Both from one registry | `PLATFORMS=linux/amd64,linux/arm64` | multi-arch |
 
 Don't run amd64-only registry images on kind on Apple Silicon — they fail with `no match for platform` or `exec format error`.
@@ -206,7 +207,7 @@ Don't run amd64-only registry images on kind on Apple Silicon — they fail with
 | `make metrics-server` | Install metrics-server (needed by HPA) |
 | `make deploy-kustomize` / `undeploy-kustomize` | Apply / delete the local Kustomize overlay |
 | `make deploy-helm` / `undeploy-helm` | Install / uninstall the Helm chart with `values-local.yaml` |
-| `make aks-push` / `aks-deploy-kustomize` / `aks-deploy-helm` | Build in ACR and deploy to AKS (`ACR=<name>`; adds tracing when `APPINSIGHTS_CONNECTION_STRING` is set) |
+| `make push` / `deploy-remote-kustomize` / `deploy-remote-helm` | Push images and deploy to any cluster (`REGISTRY=<registry/prefix>`, optional `IMAGE_TAG`, `STORAGE_CLASS`, `INGRESS_CLASS`; adds tracing when `APPINSIGHTS_CONNECTION_STRING` is set) |
 | `make appinsights-secret` | Create/update the `appinsights` Secret holding the Application Insights connection string |
 | `make dockerhub-push` / `buildx-clean` | Push to Docker Hub (`DOCKERHUB_USER=<user>`) / remove leftover builder |
 
@@ -234,8 +235,8 @@ Copilot customizations live in `.github/`: project instructions, per-language `i
 
 ```text
 services/            source + Dockerfile per microservice
-deploy/kustomize/    base + overlays/{local,aks,aks-tracing} + components/tracing
-deploy/helm/kubeplay Helm chart (values-local.yaml, values-aks.yaml)
+deploy/kustomize/    base + overlays/{local,remote,remote-tracing} + components/tracing
+deploy/helm/kubeplay Helm chart (values-local.yaml, values-remote.yaml)
 deploy/kind/         kind cluster config
 deploy/compose/      files mounted by docker-compose
 demos/               demo scenarios and extra manifests
