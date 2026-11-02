@@ -236,7 +236,7 @@ Copilot customizations live in `.github/`: project instructions, per-language `i
 ```text
 services/            source + Dockerfile per microservice
 deploy/kustomize/    base + overlays/{local,remote,remote-tracing} + components/tracing
-deploy/helm/kubeplay Helm chart (values-local.yaml, values-remote.yaml)
+deploy/helm/kubeplay Helm chart (values.yaml documents every parameter; values-local.yaml, values-remote.yaml)
 deploy/kind/         kind cluster config
 deploy/compose/      files mounted by docker-compose
 demos/               demo scenarios and extra manifests
