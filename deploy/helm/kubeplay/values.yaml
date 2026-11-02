@@ -79,7 +79,7 @@ worker:
   image: kubeplay/worker
   # Replica count of the consumer Deployment.
   replicas: 1
-  # Container CPU/memory requests and limits (also used by the CronJob and seed Job).
+  # Container CPU/memory requests and limits for the Deployment and CronJob.
   resources:
     requests: {cpu: 25m, memory: 48Mi}
     limits: {cpu: 250m, memory: 128Mi}

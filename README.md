@@ -116,6 +116,8 @@ make deploy-remote-helm REGISTRY=registry.example.com/myorg STORAGE_CLASS=<class
 kubectl get ingress kubeplay -n kubeplay   # open the ADDRESS (Helm with INGRESS_CLASS)
 ```
 
+When upgrading an existing deployment, preserve the Redis PVC's current StorageClass: pass it as `STORAGE_CLASS` for Helm or keep it in a custom Kustomize patch. Changing `storageClassName` in the StatefulSet's `volumeClaimTemplates` is rejected as an immutable-field change, even if the cluster has a default StorageClass.
+
 Remote workloads use `imagePullPolicy: Always`, so newly created pods pull updated images even when an existing tag is reused.
 
 ### Distributed tracing with Application Insights

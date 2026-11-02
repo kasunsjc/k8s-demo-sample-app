@@ -117,7 +117,16 @@ check-registry:
 	@test -n "$(REGISTRY)" || (echo "Set REGISTRY=<registry/repo prefix>, e.g. make push REGISTRY=registry.example.com/myorg" && exit 1)
 
 push: check-registry ## Build and push images to $(REGISTRY)/kubeplay/<service>:$(IMAGE_TAG) (run docker login first)
-	@for s in $(SERVICES); do docker buildx build --platform $(PLATFORMS) --push -t $(REGISTRY)/kubeplay/$$s:$(IMAGE_TAG) services/$$s || exit 1; done
+	@# A temporary docker-container builder handles cross-arch builds; it is removed afterwards even on failure.
+	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDER) --driver docker-container --bootstrap >/dev/null; \
+	rc=0; \
+	for s in $(SERVICES); do \
+	  docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) --push \
+	    -t $(REGISTRY)/kubeplay/$$s:$(IMAGE_TAG) \
+	    services/$$s || { rc=1; break; }; \
+	done; \
+	docker buildx rm $(BUILDER) >/dev/null 2>&1 && echo "Removed buildx builder $(BUILDER)"; \
+	exit $$rc
 
 appinsights-secret: ## Create/update the appinsights Secret for the OpenTelemetry Collector (APPINSIGHTS_CONNECTION_STRING=...)
 	@test -n "$$APPINSIGHTS_CONNECTION_STRING" || (echo "Set APPINSIGHTS_CONNECTION_STRING to the Application Insights connection string" && exit 1)
